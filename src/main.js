@@ -188,9 +188,10 @@ const SFX = {
     hiss(0.9, { filter: "lowpass", f: 600, gain: 0.12, at: 0.05 });
   },
   cough: function () {
-    [0, 0.22].forEach(function (a) {
-      hiss(0.16, { filter: "bandpass", f: 700, q: 1.2, gain: 0.35, at: a });
-      tone(160, 0.12, { type: "sawtooth", gain: 0.06, to: 90, at: a });
+    /* 콜록… 콜록… 콜록… for the whole cough */
+    [0, 0.2, 0.75, 0.95, 1.55, 1.75, 2.45, 2.65].forEach(function (a, i) {
+      hiss(0.16, { filter: "bandpass", f: i % 2 ? 620 : 760, q: 1.2, gain: 0.35, at: a });
+      tone(i % 2 ? 140 : 170, 0.12, { type: "sawtooth", gain: 0.07, to: 85, at: a });
     });
   },
   exhale: function () { hiss(0.8, { filter: "bandpass", f: 900, fTo: 400, q: 0.7, gain: 0.12, attack: 0.05 }); },
@@ -209,6 +210,7 @@ function breathStart(L) {
   breathStop();
   L = L || 0;
   const toFull = Math.max(0.05, (1 - L) / SM.fill);
+  /* start where the lungs are now */
   try {
     const b = hiss(toFull, { filter: "bandpass", f: 420 + 900 * L, fTo: 1350, q: 0.7, gain: 0.11, attack: 0.12, hold: true });
     if (!b) return;
@@ -244,8 +246,12 @@ function breathStop() {
 function exhaleSound(L) {
   if (EMU) (window.__sfxLog = window.__sfxLog || []).push("exhale");
   if (!SND.on) return;
-  const dur = Math.max(0.12, ((L || 0) - SM.reArm) / SM.drain);
-  try { hiss(dur, { filter: "bandpass", f: 950, fTo: 420, q: 0.7, gain: 0.13, attack: 0.03 }); } catch (e) {}
+  /* "후~" lasts until the lungs are empty enough to inhale safely */
+  const dur = Math.max(0.35, ((L || 0) - SM.safe) / SM.drain);
+  try {
+    hiss(dur, { filter: "bandpass", f: 760, fTo: 330, q: 0.5, gain: 0.26, attack: 0.04 });
+    hiss(dur * 0.8, { filter: "highpass", f: 2400, gain: 0.05, attack: 0.04 });
+  } catch (e) {}
 }
 /* sounds for what changed in a game room */
 function sfxRoom(a, b) {
@@ -1971,14 +1977,15 @@ function skChat(r, me, iDraw) {
 const SMDUR = { ready: 3, play: 40, shot: 5 };
 if (FAST) Object.keys(SMDUR).forEach(function (k) { SMDUR[k] = Math.max(2, Math.round(SMDUR[k] / FAST)); });
 const SM = {
-  fill: 0.6,      /* lungs per second while inhaling */
-  drain: 0.9,     /* lungs per second while exhaling */
+  fill: 0.75,     /* lungs per second while inhaling: full (and coughing) after ~1.3 s */
+  drain: 0.7,     /* lungs per second while exhaling */
   burn: 5,        /* % of the cigarette per second while inhaling */
-  deep: 0.55,     /* from here inhaling burns faster */
+  deep: 0.6,      /* from here inhaling burns faster */
   deepMult: 1.6,
-  reArm: 0.3,     /* must breathe out below this before inhaling again */
-  coughMs: 2000,
-  coughLoss: 3
+  safe: 0.1,      /* breathing out below this makes the next inhale safe */
+  riskSpan: 0.35, /* above `safe`, cough chance grows to 100% over this much air */
+  coughMs: 3500,
+  coughLoss: 5
 };
 const KILLER_LINES = ["꼴찌는 용서 못 해.", "담배 하나 제대로 못 피우나?", "본부에 꼴찌 자리는 없다.", "다음 생엔 폐활량부터 키워라.", "연기만 뿜다 가는구나."];
 const SMK = { rk: null, unsub: null, live: {}, holding: false, L: 0, prog: 0, coughUntil: 0, coughWhy: "", done: false, fin: null,
@@ -2120,7 +2127,7 @@ function smPress(e) {
   if (e) e.preventDefault();
   if (!smMe() || SMK.done) return;
   if (Date.now() < SMK.coughUntil) return;
-  if (SMK.L > SM.reArm) { smCough("덜 내쉬고 또 들이마셨어요!"); return; }
+  if (SMK.L > SM.safe && Math.random() < Math.min(1, (SMK.L - SM.safe) / SM.riskSpan)) { smCough("덜 내쉬고 또 들이마셨어요!"); return; }
   SMK.holding = true;
   breathStart(SMK.L);
   smLoop();
@@ -2152,7 +2159,7 @@ function smPaint() {
   if (big) { big.style.setProperty("--left", left); big.classList.toggle("lit", SMK.holding); big.classList.toggle("done", SMK.done); }
   const pct = st.querySelector(".sm-pct"); if (pct) pct.textContent = Math.floor(SMK.prog) + "% 피움";
   if (msg) {
-    msg.textContent = SMK.done ? "다 피웠다! 다른 사람을 기다려요." : coughing ? "콜록콜록! " + SMK.coughWhy : SMK.holding ? "스으읍…" : "소리를 듣고 감으로 피우세요";
+    msg.textContent = SMK.done ? "다 피웠다! 다른 사람을 기다려요." : coughing ? "콜록콜록콜록! " + SMK.coughWhy : SMK.holding ? "스으읍…" : "소리를 듣고 감으로 피우세요";
     msg.className = "sm-msg" + (coughing ? " bad" : SMK.done ? " good" : "");
   }
   if (btn) { btn.disabled = SMK.done || coughing; btn.classList.toggle("on", SMK.holding); btn.textContent = SMK.done ? "완료" : coughing ? "콜록…" : SMK.holding ? "스으읍… (떼면 날숨)" : "꾹 눌러 들이마시기"; }
@@ -2234,8 +2241,8 @@ function screenSmokeLobby() {
       h("div", { class: "guide-body" },
         h("ol", null,
           h("li", { text: "버튼을 꾹 누르고 있으면 들숨, 떼면 날숨이에요. 들이마시는 동안만 담배가 타요." }),
-          h("li", { text: "숨이 얼마나 찼는지는 화면에 안 나와요. 들이마시는 소리가 높아질수록 꽉 찬 거예요. 깊게 마실수록 더 빨리 타지만, 너무 오래 마시면 콜록! 2초 동안 못 피워요." }),
-          h("li", { text: "떼면 ‘후~’ 하고 내쉬어요. 그 소리가 끝나기 전에 또 누르면 콜록! 소리를 잘 듣고 감으로 리듬을 타세요." }),
+          h("li", { text: "숨이 얼마나 찼는지는 화면에 안 나와요. 들이마시는 소리가 높아질수록 꽉 찬 거예요. 깊게 마실수록 더 빨리 타지만, 너무 오래 마시면 콜록콜록! 3.5초 동안 못 피우고 담배도 조금 날아가요." }),
+          h("li", { text: "떼면 ‘후~’ 하고 내쉬어요. 그 소리가 끝나기 전에 또 누르면 덜 내쉰 만큼 기침할 확률이 커져요. 소리를 잘 듣고 감으로 리듬을 타세요." }),
           h("li", { text: "한 개비를 먼저 다 피운 순서대로 순위가 정해져요. 40초 안에 못 피우면 많이 피운 순서예요." }),
           h("li", { text: "라운드마다 꼴찌는 킬러에게 탕! 마지막 1인이 남을 때까지 계속해요." })))));
 }
