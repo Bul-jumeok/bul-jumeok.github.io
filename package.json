@@ -1,0 +1,20 @@
+{
+  "name": "bul-jumeok-site",
+  "version": "1.0.0",
+  "description": "불주먹조직 비밀본부",
+  "scripts": {
+    "build": "cat src/base.css src/extra.css > app.css && esbuild src/main.js --bundle --format=esm --minify --target=es2019,safari14 --loader:.txt=text --outfile=app.js",
+    "emulators": "firebase emulators:start --only firestore,auth --project demo-bulfist"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase": "^10.12.2"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.15.0",
+    "esbuild": "^0.21.5"
+  },
+  "private": true
+}

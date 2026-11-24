@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function bossDoc() { return /databases/$(database)/documents/config/boss; }
+    function isBoss() {
+      return signedIn() && exists(bossDoc()) && get(bossDoc()).data.uid == request.auth.uid;
+    }
+    function shortText(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+
+    // Who the boss is. The first Google sign-in claims it once; after that only the boss can change it.
+    match /config/boss {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isBoss();
+    }
+
+    // Wanted posters and custom liar topics: everyone reads, only the boss writes.
+    match /members/{id} {
+      allow read: if true;
+      allow write: if isBoss();
+    }
+    match /liarTopics/{id} {
+      allow read: if true;
+      allow write: if isBoss();
+    }
+
+    // Guestbook: anyone signed in (including the automatic guest sign-in) writes their own entry.
+    match /guestbook/{id} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && shortText(request.resource.data.text, 300)
+        && shortText(request.resource.data.nick, 30);
+      allow delete: if isBoss() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // Liar game rooms and their chat.
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow create, update: if signedIn();
+      allow delete: if isBoss();
+      match /msgs/{msgId} {
+        allow read: if true;
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && shortText(request.resource.data.text, 200);
+        allow delete: if isBoss();
+      }
+    }
+  }
+}
