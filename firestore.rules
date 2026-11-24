@@ -17,6 +17,12 @@ service cloud.firestore {
       allow update, delete: if isBoss();
     }
 
+    // Other settings (e.g. the sketch game's surprise names): only the boss writes.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if docId != 'boss' && isBoss();
+    }
+
     // Wanted posters and custom liar topics: everyone reads, only the boss writes.
     match /members/{id} {
       allow read: if true;
@@ -42,6 +48,14 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if signedIn();
       allow delete: if isBoss();
+      match /strokes/{strokeId} {
+        allow read: if true;
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.pts is list
+          && request.resource.data.pts.size() <= 1200;
+        allow delete: if isBoss();
+      }
       match /msgs/{msgId} {
         allow read: if true;
         allow create: if signedIn()

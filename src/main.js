@@ -4,7 +4,7 @@ import {
   GoogleAuthProvider, signInWithPopup, signOut, signInWithCredential
 } from "firebase/auth";
 import {
-  getFirestore, connectFirestoreEmulator, collection, doc, onSnapshot, query, orderBy, limit, where,
+  getFirestore, connectFirestoreEmulator, collection, doc, onSnapshot, query, orderBy, limit, limitToLast, where,
   setDoc, addDoc, updateDoc, deleteDoc, writeBatch, runTransaction, serverTimestamp,
   arrayUnion, arrayRemove, Timestamp
 } from "firebase/firestore";
@@ -51,7 +51,7 @@ const S = {
   roomId: null, room: null, roomMissing: false, msgs: [],
   drafts: {},
   pick: null, confirmDelete: false, gbConfirm: null,
-  flipped: {}, importing: false
+  flipped: {}, importing: false, sketchNames: null, sketchKnown: false, migrated: false
 };
 function isBoss() { return !!(S.user && !S.user.isAnonymous && S.bossUid && S.bossUid === S.user.uid); }
 function myUid() { return S.user ? S.user.uid : null; }
@@ -225,6 +225,10 @@ function subscribeBase() {
     S.members = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }).sort(byNo);
     S.membersReady = true; render();
   }, function () { S.membersReady = true; render(); });
+  onSnapshot(doc(db, "config", "sketch"), function (snap) {
+    S.sketchNames = snap.exists() && Array.isArray(snap.data().names) ? snap.data().names : null;
+    S.sketchKnown = true; render();
+  }, function () { S.sketchKnown = true; });
   onSnapshot(collection(db, "liarTopics"), function (snap) {
     S.topics = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); })
       .sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
@@ -250,7 +254,7 @@ function watchRoom(id) {
     S.room = snap.exists() ? Object.assign({ id: snap.id }, snap.data()) : null;
     S.roomMissing = !snap.exists(); render();
   }));
-  roomUnsubs.push(onSnapshot(query(collection(db, "rooms", id, "msgs"), orderBy("createdAt"), limit(400)), function (snap) {
+  roomUnsubs.push(onSnapshot(query(collection(db, "rooms", id, "msgs"), orderBy("createdAt"), limitToLast(400)), function (snap) {
     S.msgs = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })); });
     render();
   }));
@@ -457,7 +461,8 @@ const GAMES = [
   { id: "assoc", code: "G-01", name: "연상퀴즈", desc: "단어 하나로 떠올리는 조직원들의 머릿속.", ready: false },
   { id: "mafia", code: "G-02", name: "마피아", desc: "조직 안에 조직이 있다. 밤마다 한 명씩.", ready: true },
   { id: "yut", code: "G-03", name: "윷놀이", desc: "도·개·걸·윷·모로 가리는 본부 서열.", ready: false },
-  { id: "liar", code: "G-04", name: "라이어", desc: "혼자만 제시어를 모르는 사람을 찾아라.", ready: true }
+  { id: "liar", code: "G-04", name: "라이어", desc: "혼자만 제시어를 모르는 사람을 찾아라.", ready: true },
+  { id: "sketch", code: "G-05", name: "드로잉퀴즈", desc: "한 명은 그리고, 나머지는 맞혀라.", ready: true }
 ];
 function screenGames() {
   return h("section", { class: "screen" },
@@ -480,7 +485,7 @@ const DUR = { hint: 20, discuss: 120, vote: 20, guess: 20 };
 if (FAST) Object.keys(DUR).forEach(function (k) { DUR[k] = Math.max(2, Math.round(DUR[k] / FAST)); });
 function screenLiarLobby() {
   const me = meMember();
-  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type !== "mafia"; });
+  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && (!r.type || r.type === "liar"); });
   const list = rooms.length
     ? h("ul", { class: "room-list" }, rooms.map(function (r) {
         const mine = me && (r.players || []).indexOf(me.id) >= 0;
@@ -523,7 +528,7 @@ async function createRoom(type) {
   if (!me || !S.user) return;
   try {
     const ref = await addDoc(collection(db, "rooms"), {
-      type: type === "mafia" ? "mafia" : "liar",
+      type: type === "mafia" || type === "sketch" ? type : "liar",
       status: "lobby", createdAt: serverTimestamp(), createdBy: me.id, players: [me.id],
       mode: 0, topicChoice: -1, rounds: 1, game: 0, votes: {}, turn: 0
     });
@@ -661,7 +666,7 @@ async function submitGuess(text, timedOut, expectPhase) {
 /* ---------- Liar: phase timers ---------- */
 const GRACE_MS = 1500;
 let lastTimeoutKey = "";
-function durOf(r) { return (r && r.type === "mafia" ? MDUR : DUR)[r && r.status]; }
+function durOf(r) { return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : DUR)[r && r.status]; }
 function phaseEnd(r) {
   if (!r || !durOf(r) || !r.phaseAt || !r.phaseAt.toMillis) return null;
   return r.phaseAt.toMillis() + durOf(r) * 1000;
@@ -677,6 +682,7 @@ function timerEl(r, label) {
 }
 async function onTimeout(r) {
   if (r.type === "mafia") return mafiaTimeout(r);
+  if (r.type === "sketch") return sketchTimeout(r);
   if (r.status === "hint") return advanceTurn("timeout", null, r.phase);
   if (r.status === "discuss") return toVote(r.phase);
   if (r.status === "vote") return finalizeVotes(true, r.phase);
@@ -701,7 +707,7 @@ setInterval(function () {
   }
 }, 500);
 async function backToLobby() {
-  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0 });
+  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false });
 }
 
 function screenRoom(id) {
@@ -712,6 +718,7 @@ function screenRoom(id) {
   if (!r) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "방에 들어가는 중…" }));
   if (r.status === "closed") return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "이 방은 닫혔어요. 새 방을 만들어 주세요." }));
   if (r.type === "mafia") return screenMafiaRoom(r);
+  if (r.type === "sketch") return screenSketchRoom(r);
 
   const me = meMember();
   const players = r.players || [];
@@ -756,7 +763,7 @@ function lobbyPanel(r, me, inRoom, players) {
       onclick: function () { const p = {}; p[field] = value; roomUpdate(p); } }, label, sub ? h("small", { text: sub }) : null);
   }
   const topicSel = h("select", { id: "room-topic", class: "select" },
-    h("option", { value: "-1", text: "랜덤 (우리끼리 주제 포함)" }),
+    h("option", { value: "-1", text: "랜덤" }),
     LIAR_DEFAULT_TOPICS.map(function (t, i) { return h("option", { value: String(i), text: t.name }); }));
   topicSel.value = String(r.topicChoice == null ? -1 : r.topicChoice);
   topicSel.addEventListener("change", function () { roomUpdate({ topicChoice: parseInt(topicSel.value, 10) }); });
@@ -1342,6 +1349,436 @@ function mChat(r, ctx) {
   return h("div", { class: "field" }, h("div", { class: "field-label", text: ctx.myRole === "mafia" && r.status === "night" && ctx.iAlive ? "대화 · 지금은 마피아끼리만 보여요" : "대화" }), log, f);
 }
 
+
+/* ---------- Sketch (드로잉퀴즈): drawing and guessing ---------- */
+const SDUR = { draw: 60, reveal: 5 };
+if (FAST) Object.keys(SDUR).forEach(function (k) { SDUR[k] = Math.max(2, Math.round(SDUR[k] / FAST)); });
+const SK_WORDS = ["사과", "바나나", "수박", "포도", "당근", "버섯", "고양이", "강아지", "기린", "코끼리", "문어", "상어", "거북이", "토끼", "펭귄", "공룡",
+  "자동차", "비행기", "자전거", "로켓", "우산", "안경", "시계", "피자", "햄버거", "아이스크림", "케이크", "눈사람", "해바라기", "선인장", "무지개",
+  "화산", "등대", "성", "기타", "피아노", "축구공", "왕관", "칫솔", "냉장고", "텐트", "선풍기", "망원경", "다이아몬드", "열쇠", "촛불", "유령",
+  "해적", "인어", "산타", "치킨", "라면", "삼겹살", "모자", "신발", "물고기", "달팽이", "나비", "번개", "눈사태"];
+const PAPER = "#f3f1ec";
+const INKS = ["#1b1b1d", "#d2382f", "#2f6fd2", "#2f9e57", "#e2a21b", "#8a4fc9", "#8b5a2b"];
+const SK = { canvas: null, ctx: null, turnKey: null, unsub: null, strokes: [], drawing: false, pendingRender: false, cur: null, color: INKS[0], size: 8, eraser: false, flushT: null };
+
+/* Surprise names: never announced in the UI. Default list until the boss saves one. */
+const SK_DEFAULT_NAMES = ["효니", "3232", "우디", "뉴햄찌", "유나룽", "쏘기", "르네모", "뉴히쵸", "주먹이", "샤리", "지금이(지순이)", "루나"];
+const SK_SURPRISE = 0.2;
+function skCrewWords() {
+  const seen = {}, out = [];
+  function add(w) { w = String(w || "").trim(); if (w && !seen[w]) { seen[w] = 1; out.push(w); } }
+  S.members.forEach(function (m) { add(m.nick); });
+  (S.sketchNames || SK_DEFAULT_NAMES).forEach(add);
+  return out;
+}
+function skPickWord(mode, used) {
+  const crew = skCrewWords(), general = SK_WORDS;
+  const pool = crew.length && Math.random() < SK_SURPRISE ? crew : general;
+  let fresh = pool.filter(function (w) { return (used || []).indexOf(w) < 0; });
+  if (!fresh.length) fresh = pool;
+  return fresh[Math.floor(Math.random() * fresh.length)];
+}
+function skAnswers(word) {
+  const out = [word], m = /^(.*?)\((.*?)\)$/.exec(word || "");
+  if (m) { out.push(m[1]); out.push(m[2]); }
+  return out.map(normWord).filter(Boolean);
+}
+function skMatches(text, word) { return skAnswers(word).indexOf(normWord(text)) >= 0; }
+const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+function skHint(word, showCho) {
+  return Array.from(word || "").map(function (ch) {
+    const c = ch.charCodeAt(0);
+    if (ch === " ") return " ";
+    if (c >= 0xAC00 && c <= 0xD7A3) return showCho ? CHO.charAt(Math.floor((c - 0xAC00) / 588)) : "○";
+    if (/[()]/.test(ch)) return ch;
+    return "○";
+  }).join("");
+}
+function skDrawer(r) { return r.order[r.turn % r.order.length]; }
+function skTotal(r) { return r.order.length * (r.rounds || 1); }
+function skTurnKey(r) { return (r.game || 0) * 1000 + (r.turn || 0); }
+
+async function startSketch() {
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "lobby") throw { code: "phase" };
+      const lineup = (r.players || []).filter(function (p) { return !!findMember(p); }).slice().sort();
+      if (lineup.length < 2) throw { code: "few" };
+      const order = lineup.slice();
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
+      const word = skPickWord(r.wordMode || "mix", []);
+      const game = (r.game || 0) + 1;
+      sysMsg(tx, { game: game }, "🎨 드로잉퀴즈 시작! 첫 번째 화가는 " + nickOf(order[0]) + "님이에요.");
+      tx.update(roomRef(), nextPhase(r, {
+        status: "draw", lineup: lineup, order: order, turn: 0, word: word, used: [word], guessed: [], scores: {},
+        skipUsed: false, game: game, startedAt: serverTimestamp()
+      }));
+    });
+  } catch (e) {
+    if (e && e.code === "few") toast("2명 이상 모여야 시작할 수 있어요.");
+    else if (e && e.code === "phase") toast("이미 게임이 시작됐어요.");
+    else toast(errText(e));
+  }
+}
+async function skToReveal(expectPhase, why) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "draw") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    sysMsg(tx, r, (why || "⏰ 시간 끝!") + " 정답은 ‘" + r.word + "’");
+    tx.update(roomRef(), nextPhase(r, { status: "reveal" }));
+  });
+}
+async function skNextTurn(expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "reveal") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    const next = (r.turn || 0) + 1;
+    if (next >= skTotal(r)) {
+      sysMsg(tx, r, "🏁 드로잉퀴즈 끝! 점수를 확인하세요.");
+      tx.update(roomRef(), nextPhase(r, { status: "result" }));
+      return;
+    }
+    const word = skPickWord(r.wordMode || "mix", r.used || []);
+    const drawer = r.order[next % r.order.length];
+    sysMsg(tx, r, "🎨 " + (next + 1) + "번째 그림 · 화가는 " + nickOf(drawer) + "님");
+    tx.update(roomRef(), nextPhase(r, { status: "draw", turn: next, word: word, used: (r.used || []).concat([word]), guessed: [], skipUsed: false }));
+  });
+}
+function sketchTimeout(r) {
+  if (r.status === "draw") return skToReveal(r.phase);
+  if (r.status === "reveal") return skNextTurn(r.phase);
+}
+async function skSkipWord() {
+  const me = meMember(); if (!me) return;
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "draw" || skDrawer(r) !== me.id || r.skipUsed || (r.guessed || []).length) throw { code: "no" };
+      const word = skPickWord(r.wordMode || "mix", (r.used || []).concat([r.word]));
+      tx.update(roomRef(), { word: word, used: (r.used || []).concat([word]), skipUsed: true });
+    });
+    await skClear();
+  } catch (e) { toast(e && e.code === "no" ? "단어는 한 번만 바꿀 수 있어요." : errText(e)); }
+}
+async function skGuess(text) {
+  const me = meMember(), r = S.room;
+  if (!me || !r) return;
+  const canGuess = r.status === "draw" && r.lineup.indexOf(me.id) >= 0 && skDrawer(r) !== me.id && (r.guessed || []).indexOf(me.id) < 0;
+  if (canGuess && skMatches(text, r.word)) {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const rr = snap.data();
+      if (!rr || rr.status !== "draw" || rr.turn !== r.turn || rr.game !== r.game) throw { code: "late" };
+      const g = rr.guessed || [];
+      if (g.indexOf(me.id) >= 0) return;
+      const pts = g.length === 0 ? 3 : g.length === 1 ? 2 : 1;
+      const dr = skDrawer(rr), scores = Object.assign({}, rr.scores || {});
+      scores[me.id] = (scores[me.id] || 0) + pts;
+      scores[dr] = (scores[dr] || 0) + 1;
+      const ng = g.concat([me.id]);
+      sysMsg(tx, rr, "🎯 " + me.nick + "님 정답! (+" + pts + "점)");
+      if (ng.length >= rr.lineup.length - 1) {
+        sysMsg(tx, rr, "모두 맞혔어요! 정답은 ‘" + rr.word + "’");
+        tx.update(roomRef(), nextPhase(rr, { guessed: ng, scores: scores, status: "reveal" }));
+      } else tx.update(roomRef(), { guessed: ng, scores: scores });
+    });
+  } else {
+    await sendMsg("chat", text);
+  }
+}
+
+/* canvas: one persistent element, strokes synced through rooms/{id}/strokes */
+function skCanvas() {
+  if (SK.canvas) return SK.canvas;
+  const c = document.createElement("canvas");
+  c.className = "sk-canvas";
+  c.setAttribute("aria-label", "그림판");
+  c.addEventListener("pointerdown", skDown);
+  c.addEventListener("pointermove", skMove);
+  ["pointerup", "pointercancel"].forEach(function (ev) { c.addEventListener(ev, skUp); });
+  SK.canvas = c; SK.ctx = c.getContext("2d");
+  if (window.ResizeObserver) new ResizeObserver(skResize).observe(c);
+  return c;
+}
+function skResize() {
+  const c = SK.canvas, w = c && c.clientWidth;
+  if (!w) return;
+  const px = Math.round(w * Math.min(2, window.devicePixelRatio || 1));
+  if (c.width !== px) { c.width = px; c.height = px; skRedraw(); }
+}
+function skSeg(x, k, s) {
+  const p = s.pts;
+  if (!p || p.length < 2) return;
+  x.strokeStyle = s.color; x.lineWidth = s.size * k;
+  x.beginPath(); x.moveTo(p[0] * k, p[1] * k);
+  if (p.length === 2) x.lineTo(p[0] * k + 0.1, p[1] * k + 0.1);
+  for (let i = 2; i < p.length; i += 2) x.lineTo(p[i] * k, p[i + 1] * k);
+  x.stroke();
+}
+function skRedraw() {
+  const c = SK.canvas, x = SK.ctx;
+  if (!c || !c.width) return;
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.fillStyle = PAPER; x.fillRect(0, 0, c.width, c.height);
+  x.lineCap = "round"; x.lineJoin = "round";
+  const k = c.width / 1000;
+  let start = 0;
+  SK.strokes.forEach(function (st, i) { if (st.clear) start = i + 1; });
+  SK.strokes.slice(start).forEach(function (st) { skSeg(x, k, st); });
+  if (SK.cur) skSeg(x, k, SK.cur);
+}
+function skWatch(key) {
+  if (SK.turnKey === key) return;
+  if (SK.unsub) { SK.unsub(); SK.unsub = null; }
+  SK.turnKey = key; SK.strokes = []; SK.cur = null;
+  skRedraw();
+  if (key == null || !S.roomId) return;
+  SK.unsub = onSnapshot(query(collection(db, "rooms", S.roomId, "strokes"), where("turn", "==", key)), function (snap) {
+    SK.strokes = snap.docs.map(function (d) { return d.data(); }).sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
+    skRedraw();
+  });
+}
+function skCanDraw() {
+  const r = S.room, me = meMember();
+  return !!(r && r.type === "sketch" && r.status === "draw" && me && skDrawer(r) === me.id);
+}
+function skPoint(e) {
+  const rect = SK.canvas.getBoundingClientRect();
+  const nx = Math.round(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 1000);
+  const ny = Math.round(Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)) * 1000);
+  return [nx, ny];
+}
+let skSeq = 0;
+function skFlush(final) {
+  const cur = SK.cur;
+  if (!cur || cur.pts.length < 2) return;
+  if (!final && cur.pts.length < 4) return;
+  const chunk = { uid: myUid(), turn: SK.turnKey, color: cur.color, size: cur.size, pts: cur.pts.slice(0, 600), t: Date.now() * 1000 + (skSeq++ % 1000), createdAt: serverTimestamp() };
+  SK.strokes.push(chunk);
+  addDoc(collection(db, "rooms", S.roomId, "strokes"), chunk).catch(function (e) { toast(errText(e)); });
+  const last = cur.pts.slice(-2);
+  SK.cur = final ? null : { color: cur.color, size: cur.size, pts: last };
+}
+function skDown(e) {
+  if (!skCanDraw()) return;
+  e.preventDefault();
+  try { SK.canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  SK.drawing = true;
+  SK.cur = { color: SK.eraser ? PAPER : SK.color, size: SK.eraser ? 28 : SK.size, pts: skPoint(e) };
+  skRedraw();
+  clearInterval(SK.flushT);
+  SK.flushT = setInterval(function () { skFlush(false); }, 250);
+}
+function skMove(e) {
+  if (!SK.drawing || !SK.cur) return;
+  e.preventDefault();
+  const p = skPoint(e), pts = SK.cur.pts, lx = pts[pts.length - 2], ly = pts[pts.length - 1];
+  if (Math.abs(p[0] - lx) + Math.abs(p[1] - ly) < 4) return;
+  pts.push(p[0], p[1]);
+  const x = SK.ctx, k = SK.canvas.width / 1000;
+  x.lineCap = "round"; x.lineJoin = "round";
+  x.strokeStyle = SK.cur.color; x.lineWidth = SK.cur.size * k;
+  x.beginPath(); x.moveTo(lx * k, ly * k); x.lineTo(p[0] * k, p[1] * k); x.stroke();
+}
+function skUp() {
+  if (!SK.drawing) return;
+  clearInterval(SK.flushT);
+  skFlush(true);
+  SK.drawing = false; SK.cur = null;
+  if (SK.pendingRender) { SK.pendingRender = false; render(); }
+}
+async function skClear() {
+  try { await addDoc(collection(db, "rooms", S.roomId, "strokes"), { uid: myUid(), turn: SK.turnKey, clear: true, pts: [], t: Date.now() * 1000 + (skSeq++ % 1000), createdAt: serverTimestamp() }); }
+  catch (e) { toast(errText(e)); }
+}
+function skTools() {
+  const swatches = INKS.map(function (c) {
+    return h("button", { type: "button", class: "sk-ink", style: "background:" + c, "aria-label": "색 " + c,
+      "aria-pressed": !SK.eraser && SK.color === c ? "true" : "false", onclick: function () { SK.color = c; SK.eraser = false; render(); } });
+  });
+  return h("div", { class: "sk-tools" },
+    h("div", { class: "sk-row" }, swatches),
+    h("div", { class: "sk-row" },
+      [["가늘게", 4], ["보통", 8], ["굵게", 16]].map(function (o) {
+        return h("button", { type: "button", class: "sk-btn", "aria-pressed": !SK.eraser && SK.size === o[1] ? "true" : "false", onclick: function () { SK.size = o[1]; SK.eraser = false; render(); }, text: o[0] });
+      }),
+      h("button", { type: "button", class: "sk-btn", "aria-pressed": SK.eraser ? "true" : "false", onclick: function () { SK.eraser = true; render(); }, text: "지우개" }),
+      h("button", { type: "button", class: "sk-btn danger", onclick: skClear, text: "전체 지우기" })));
+}
+
+function screenSketchLobby() {
+  const me = meMember();
+  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type === "sketch"; });
+  const list = rooms.length
+    ? h("ul", { class: "room-list" }, rooms.map(function (r) {
+        const mine = me && (r.players || []).indexOf(me.id) >= 0;
+        const label = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : "게임 중";
+        return h("li", null, h("button", { type: "button", class: "room-item", onclick: function () { go("room-" + r.id); } },
+          h("span", { class: "ri-main" },
+            h("b", { text: nickOf(r.createdBy) + "의 방" }),
+            h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
+          h("span", { class: "ri-side" },
+            h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
+            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+      }))
+    : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
+  return h("section", { class: "screen" },
+    h("button", { class: "back", type: "button", onclick: function () { go("games"); }, text: "게임방으로" }),
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: "G-05" }), h("h2", { text: "드로잉퀴즈" }),
+        h("p", { text: "한 명이 그리고 나머지가 맞혀요. 먼저 맞힐수록 점수가 높아요." }))),
+    h("button", { type: "button", class: "save", disabled: !me || !S.user, onclick: function () { createRoom("sketch"); } },
+      me ? "새 방 만들기" : "신원을 고른 조직원만 방을 만들 수 있어요"),
+    h("div", { class: "field" }, h("div", { class: "field-label", text: "열린 방" }), list),
+    h("details", { class: "guide" },
+      h("summary", { text: "드로잉퀴즈 규칙" }),
+      h("div", { class: "guide-body" },
+        h("ol", null,
+          h("li", { text: "참가자가 돌아가면서 한 번씩 화가가 돼요. 화가에게만 제시어가 보여요." }),
+          h("li", { text: "화가는 60초 동안 그려요. 글자나 숫자를 쓰면 반칙이에요. 단어가 너무 어려우면 한 번 바꿀 수 있어요." }),
+          h("li", { text: "나머지는 대화창에 정답을 입력해요. 틀린 답은 모두에게 보이고, 맞힌 답은 숨겨져요." }),
+          h("li", { text: "먼저 맞힌 순서대로 3점, 2점, 1점. 화가는 맞힌 사람 한 명당 1점을 받아요." }),
+          h("li", { text: "시간이 반쯤 지나면 정답의 초성 힌트가 나와요." })))),
+    isBoss() ? skNamesPanel() : null);
+}
+function skNamesPanel() {
+  const ta = draft("textarea", "sk-names", { class: "gb-in", placeholder: "한 줄에 하나씩, 또는 쉼표로 구분" });
+  if (S.drafts["sk-names"] == null) ta.value = (S.sketchNames || SK_DEFAULT_NAMES).join("\n");
+  return h("details", { class: "guide" },
+    h("summary", { text: "깜짝 제시어 이름 · 두목만 보여요" }),
+    h("div", { class: "guide-body" },
+      h("p", { class: "note", text: "다섯 판에 한 번꼴로 이 이름들이나 조직원 닉네임이 제시어로 나와요. 조직원들에게는 비밀이에요." }),
+      ta,
+      h("button", { type: "button", class: "save", onclick: async function () {
+        const seen = {};
+        const names = (S.drafts["sk-names"] != null ? S.drafts["sk-names"] : ta.value).split(/[\n,]/).map(function (w) { return w.trim(); })
+          .filter(function (w) { if (!w || seen[w]) return false; seen[w] = 1; return true; }).slice(0, 80);
+        try { await setDoc(doc(db, "config", "sketch"), { names: names }); delete S.drafts["sk-names"]; toast("깜짝 이름을 저장했어요."); }
+        catch (e) { toast(errText(e)); }
+      }, text: "저장" })));
+}
+/* The old liar topic of crew names moves to the sketch surprise list (once, on the boss's phone). */
+async function migrateCrewTopic() {
+  if (S.migrated || !isBoss() || !S.sketchKnown) return;
+  const t = S.topics.find(function (x) { return x.name === "우리끼리 이름"; });
+  if (!t) return;
+  S.migrated = true;
+  try {
+    if (!S.sketchNames) await setDoc(doc(db, "config", "sketch"), { names: t.words || [] });
+    await deleteDoc(doc(db, "liarTopics", t.id));
+  } catch (e) { S.migrated = false; }
+}
+function screenSketchRoom(r) {
+  const back = h("button", { class: "back", type: "button", onclick: function () { go("game-sketch"); }, text: "드로잉퀴즈 방 목록" });
+  const me = meMember();
+  const players = r.players || [];
+  const inRoom = me && players.indexOf(me.id) >= 0;
+  const playing = r.status !== "lobby";
+  const lineup = playing ? (r.lineup || []) : players;
+  if (playing && (!r.order || !r.order.length)) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "게임 정보를 읽지 못했어요." }),
+    h("button", { type: "button", class: "ghost wide", onclick: backToLobby, text: "대기실로 돌리기" }));
+  skWatch(r.status === "draw" || r.status === "reveal" ? skTurnKey(r) : null);
+  const scores = r.scores || {};
+  const drawer = playing && r.order ? skDrawer(r) : null;
+  const iDraw = !!(me && drawer === me.id && r.status === "draw");
+  const guessed = r.guessed || [];
+
+  const title = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : (r.turn + 1) + " / " + skTotal(r) + "번째 그림";
+  const head = h("div", { class: "room-head" },
+    h("div", null, h("span", { class: "eyebrow", text: "드로잉퀴즈 · " + nickOf(r.createdBy) + "의 방" }), h("h2", { text: title })),
+    h("span", { class: "mode-chip", text: (r.rounds || 1) + "바퀴" }));
+  const chips = h("div", { class: "chips" }, lineup.slice().sort(function (a, b) { return (scores[b] || 0) - (scores[a] || 0); }).map(function (p) {
+    const ok = guessed.indexOf(p) >= 0;
+    return h("span", { class: "chip static" + (me && p === me.id ? " me" : "") + (ok ? " done" : "") },
+      (p === drawer && r.status !== "result" ? "🖌 " : "") + nickOf(p) + (playing ? " " + (scores[p] || 0) + "점" : "") + (ok ? " ✓" : ""));
+  }));
+
+  let body;
+  if (r.status === "lobby") body = skLobbyPanel(r, me, inRoom, players);
+  else if (r.status === "result") body = skResultPanel(r);
+  else {
+    const half = r.status === "draw" && phaseEnd(r) != null && phaseEnd(r) - Date.now() < SDUR.draw * 500;
+    const info = r.status === "reveal"
+      ? h("div", { class: "panel turn" }, h("div", { class: "field-label", text: "정답 공개" }), timerEl(r, "다음 그림까지"),
+          h("p", { class: "sk-answer" }, "정답 ", h("b", { text: r.word })),
+          h("p", { class: "note", text: guessed.length ? "맞힌 사람: " + guessed.map(nickOf).join(", ") : "아무도 못 맞혔어요." }))
+      : iDraw
+        ? h("div", { class: "panel turn mine" }, h("div", { class: "field-label", text: "내가 화가예요" }), timerEl(r, "그리기 남은 시간"),
+            h("p", { class: "sk-answer" }, "그릴 것 ", h("b", { text: r.word })),
+            !r.skipUsed && !guessed.length ? h("button", { type: "button", class: "link-btn", onclick: skSkipWord, text: "다른 단어로 바꾸기 (1번)" }) : null)
+        : h("div", { class: "panel turn" }, h("div", { class: "field-label", text: "화가 " + nickOf(drawer) }), timerEl(r, "남은 시간"),
+            h("p", { class: "sk-answer" }, "정답 힌트 ", h("b", { class: "sk-hint", text: skHint(r.word, half) })),
+            h("p", { class: "note", text: me && guessed.indexOf(me.id) >= 0 ? "정답을 맞혔어요! 다른 사람을 기다려요." : half ? "초성 힌트가 열렸어요." : Array.from(r.word || "").length + "글자예요. 시간이 반쯤 지나면 초성이 보여요." }));
+    body = [info, h("div", { class: "sk-stage" + (iDraw ? " drawing" : "") }, skCanvas(), iDraw ? skTools() : null)];
+  }
+  const res = h("section", { class: "screen room" }, back, head,
+    h("div", { class: "field" }, h("div", { class: "field-label", text: playing ? "점수" : "모인 사람 " + lineup.length + "명" }), chips),
+    body, skChat(r, me, iDraw));
+  requestAnimationFrame(skResize);
+  return res;
+}
+function skLobbyPanel(r, me, inRoom, players) {
+  function seg(field, value, label, def) {
+    return h("button", { type: "button", "aria-pressed": (r[field] || def) === value ? "true" : "false",
+      onclick: function () { const p = {}; p[field] = value; roomUpdate(p); } }, label);
+  }
+  const n = players.length, enough = n >= 2;
+  return h("div", { class: "panel" },
+    h("div", { class: "field-label", text: "게임 설정 · 참가자 누구나 바꿀 수 있어요" }),
+    h("div", { class: "seg" }, seg("rounds", 1, "1바퀴", 1), seg("rounds", 2, "2바퀴", 1)),
+    !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
+      : inRoom
+        ? h("div", { class: "op-row" },
+            h("button", { type: "button", onclick: leaveRoom, text: "방 나가기" }),
+            h("button", { type: "button", class: "go", disabled: !enough, onclick: startSketch, text: enough ? "게임 시작" : "2명부터 시작" }))
+        : h("button", { type: "button", class: "save", onclick: joinRoom, text: "이 방에 참가하기" }),
+    h("p", { class: "hint", text: "단톡방에 ‘게임방 → 드로잉퀴즈에 방 열었어’라고 알려주세요." }));
+}
+function skResultPanel(r) {
+  const scores = r.scores || {};
+  const rank = (r.lineup || []).slice().sort(function (a, b) { return (scores[b] || 0) - (scores[a] || 0); });
+  const medal = ["🥇", "🥈", "🥉"];
+  return h("div", { class: "answer team" },
+    h("div", { class: "result-title", text: nickOf(rank[0]) + " 우승!" }),
+    h("ul", { class: "role-list" }, rank.map(function (p, i) {
+      return h("li", null, h("span", { text: (medal[i] || (i + 1) + "등") + " " + nickOf(p) }), h("b", { text: (scores[p] || 0) + "점" }));
+    })),
+    h("div", { class: "op-row" },
+      h("button", { type: "button", onclick: function () { go("game-sketch"); }, text: "방 목록" }),
+      h("button", { type: "button", class: "go", onclick: backToLobby, text: "같은 방에서 한 판 더" })));
+}
+function skChat(r, me, iDraw) {
+  const game = r.game || 0;
+  const msgs = S.msgs.filter(function (m) { return (m.game || 0) === game; });
+  const isPlayer = me && (r.lineup || []).indexOf(me.id) >= 0;
+  const done = me && (r.guessed || []).indexOf(me.id) >= 0;
+  let ph = "대화 보내기", enabled = true;
+  if (r.status === "draw") {
+    if (iDraw) { ph = "화가는 그림으로만 말해요"; enabled = false; }
+    else if (!isPlayer) { ph = "게임 중에는 참가자만 입력할 수 있어요"; enabled = false; }
+    else if (done) { ph = "정답을 맞혔어요! 다음 그림을 기다려요"; enabled = false; }
+    else ph = "정답 입력";
+  }
+  const log = h("div", { class: "log", role: "log", "aria-live": "polite" },
+    msgs.length ? msgs.map(function (m) {
+      if (m.kind === "sys" || m.kind === "skip") return h("div", { class: "msg-sys strong", text: m.text });
+      const mine = me && m.memberId === me.id;
+      return h("div", { class: "bubble chat" + (mine ? " mine" : "") },
+        h("div", { class: "b-meta" }, h("b", { text: m.nick || "손님" })), h("div", { class: "b-text", text: m.text }));
+    }) : h("div", { class: "msg-sys", text: "아직 대화가 없어요." }));
+  const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "60", placeholder: ph, autocomplete: "off", disabled: !enabled });
+  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm" + (r.status === "draw" && enabled ? " go" : ""), disabled: !enabled, text: r.status === "draw" ? "제출" : "보내기" }));
+  f.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = inp.value.trim(); if (!t || !S.user || !enabled) return;
+    S.drafts["chat-text"] = ""; inp.value = "";
+    try { await skGuess(t); render(); } catch (e) { toast(e && e.code === "late" ? "아쉽게 시간이 지났어요." : errText(e)); }
+  });
+  return h("div", { class: "field" }, h("div", { class: "field-label", text: r.status === "draw" ? "정답 맞히기" : "대화" }), log, f);
+}
+
 /* ---------- Liar: custom topics (boss) ---------- */
 function topicManager() {
   return h("div", { class: "panel" },
@@ -1557,6 +1994,8 @@ function render() {
   requestAnimationFrame(function () { queued = false; draw(); });
 }
 function draw() {
+  if (SK.drawing) { SK.pendingRender = true; return; }
+  migrateCrewTopic();
   const active = document.activeElement;
   const aid = active && active.id && main.contains(active) ? active.id : null;
   const sel = aid && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
@@ -1574,10 +2013,11 @@ function draw() {
   else if (r === "games") { tab = "games"; view = screenGames(); }
   else if (r === "game-liar") { tab = "games"; view = screenLiarLobby(); }
   else if (r === "game-mafia") { tab = "games"; view = screenMafiaLobby(); }
+  else if (r === "game-sketch") { tab = "games"; view = screenSketchLobby(); }
   else if (r.indexOf("room-") === 0) { tab = "games"; view = screenRoom(r.slice(5)); }
   else if (r === "guestbook") { tab = "guestbook"; view = screenGuestbook(); }
   else view = screenHQ();
-  if (r.indexOf("room-") !== 0) watchRoom(null);
+  if (r.indexOf("room-") !== 0) { watchRoom(null); skWatch(null); }
   if (r !== lastRoute) S.confirmDelete = false;
 
   const gate = S.membersReady && needsGate();

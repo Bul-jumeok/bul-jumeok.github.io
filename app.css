@@ -602,3 +602,20 @@ img { max-width: 100%; }
 .role-list li.dead span { color: var(--faint); }
 .op-row button[aria-pressed="true"] { border-color: var(--red); }
 .text-in:disabled { opacity: 0.6; }
+
+/* sketch */
+.sk-stage { display: grid; gap: 10px; }
+.sk-canvas { display: block; width: 100%; max-width: 100%; aspect-ratio: 1 / 1; background: #f3f1ec; border: 1px solid var(--line); border-radius: 2px; touch-action: none; }
+.sk-stage.drawing .sk-canvas { border-color: var(--red); cursor: crosshair; }
+.sk-tools { display: grid; gap: 8px; }
+.sk-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sk-ink { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); padding: 0; }
+.sk-ink[aria-pressed="true"] { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
+.sk-btn { min-height: 36px; padding: 6px 12px; border-radius: 3px; border: 1px solid var(--line); background: var(--raised); color: var(--fg); font-size: 13px; }
+.sk-btn[aria-pressed="true"] { border-color: var(--red); background: var(--red-soft); }
+.sk-btn.danger { color: var(--red); margin-left: auto; }
+.sk-answer { margin: 0; font-size: 15px; color: var(--muted); }
+.sk-answer b { font-family: var(--font-display); font-size: 30px; font-weight: 400; color: var(--fg); margin-left: 6px; letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.sk-hint { letter-spacing: 0.2em !important; }
+.seg.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg.three button + button { border-left: 1px solid var(--line); }
