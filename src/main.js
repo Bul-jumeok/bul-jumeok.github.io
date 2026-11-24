@@ -197,7 +197,33 @@ const SFX = {
   exhale: function () { hiss(0.8, { filter: "bandpass", f: 900, fTo: 400, q: 0.7, gain: 0.12, attack: 0.05 }); },
   night: function () { tone(392, 0.5, { type: "triangle", gain: 0.1 }); tone(311, 0.6, { type: "triangle", gain: 0.1, at: 0.35 }); tone(233, 0.9, { type: "triangle", gain: 0.1, at: 0.7 }); },
   morning: function () { [523, 659, 784, 1047].forEach(function (f, i) { tone(f, 0.3, { type: "triangle", gain: 0.1, at: i * 0.11 }); }); },
-  fanfare: function () { [523, 659, 784, 1047, 784, 1047].forEach(function (f, i) { tone(f, i === 5 ? 0.7 : 0.18, { type: "square", gain: 0.07, at: i * 0.15 }); }); }
+  fanfare: function () { [523, 659, 784, 1047, 784, 1047].forEach(function (f, i) { tone(f, i === 5 ? 0.7 : 0.18, { type: "square", gain: 0.07, at: i * 0.15 }); }); },
+  /* clock: wooden tick/tock, sharper when time is almost up */
+  tickA: function () { hiss(0.03, { filter: "bandpass", f: 3200, q: 4, gain: 0.25 }); tone(1250, 0.05, { type: "triangle", gain: 0.08 }); },
+  tickB: function () { hiss(0.03, { filter: "bandpass", f: 2400, q: 4, gain: 0.22 }); tone(940, 0.05, { type: "triangle", gain: 0.08 }); },
+  tickHot: function () { hiss(0.03, { filter: "bandpass", f: 4200, q: 5, gain: 0.32 }); tone(1760, 0.06, { type: "square", gain: 0.06 }); },
+  click: function () { hiss(0.025, { filter: "highpass", f: 3000, gain: 0.3 }); tone(2200, 0.03, { type: "square", gain: 0.04 }); },
+  cock: function () {
+    hiss(0.05, { filter: "bandpass", f: 1800, q: 3, gain: 0.4 }); tone(300, 0.05, { type: "square", gain: 0.06 });
+    hiss(0.06, { filter: "bandpass", f: 2600, q: 3, gain: 0.45, at: 0.16 }); tone(420, 0.06, { type: "square", gain: 0.07, at: 0.16 });
+  },
+  dun: function () { tone(98, 0.35, { type: "sawtooth", gain: 0.18 }); tone(92, 0.9, { type: "sawtooth", gain: 0.2, at: 0.38 }); tone(46, 0.9, { gain: 0.25, at: 0.38 }); },
+  sad: function () { [392, 370, 349, 330].forEach(function (f, i) { tone(f, i === 3 ? 1.0 : 0.32, { type: "sawtooth", gain: 0.07, at: i * 0.34, to: i === 3 ? 300 : null }); }); },
+  heal: function () { [784, 988, 1175, 1568].forEach(function (f, i) { tone(f, 0.4, { gain: 0.08, at: i * 0.09 }); }); },
+  relief: function () { hiss(0.9, { filter: "lowpass", f: 900, fTo: 300, gain: 0.12, attack: 0.08 }); tone(523, 0.5, { type: "triangle", gain: 0.07, at: 0.35 }); tone(659, 0.7, { type: "triangle", gain: 0.07, at: 0.6 }); },
+  flip: function () { hiss(0.12, { filter: "bandpass", f: 1800, fTo: 4200, q: 1, gain: 0.25 }); },
+  ominous: function () { [110, 131, 156].forEach(function (f) { tone(f, 2.0, { type: "sawtooth", gain: 0.06 }); }); tone(55, 2.2, { gain: 0.2 }); },
+  sly: function () { [659, 587, 659, 523].forEach(function (f, i) { tone(f, 0.18, { type: "square", gain: 0.06, at: i * 0.16 }); }); },
+  eerie: function () {
+    const c = ac(); if (!c) return;
+    const t = c.currentTime, os = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain(), g = c.createGain();
+    os.type = "sine"; os.frequency.setValueAtTime(110, t); os.frequency.linearRampToValueAtTime(82, t + 2.2);
+    lfo.frequency.value = 5; lg.gain.value = 6; lfo.connect(lg); lg.connect(os.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.16, t + 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+    os.connect(g); g.connect(c.destination);
+    os.start(t); lfo.start(t); os.stop(t + 2.5); lfo.stop(t + 2.5);
+    tone(392, 0.5, { type: "triangle", gain: 0.06, at: 0.2 }); tone(311, 0.8, { type: "triangle", gain: 0.06, at: 0.6 });
+  }
 };
 function sfx(name) {
   if (EMU) (window.__sfxLog = window.__sfxLog || []).push(name);
@@ -258,23 +284,36 @@ function sfxRoom(a, b) {
   if (!a || !b || a.id !== b.id) return;
   const me = meMember(), my = me && me.id, st = a.status !== b.status;
   const fewer = (b.alive || []).length < (a.alive || []).length;
-  if (st && b.status === "result") { if (b.type === "smoke") { sfx("bang"); setTimeout(function () { sfx("fanfare"); }, 700); } else sfx("fanfare"); return; }
+  function later(name, ms) { setTimeout(function () { sfx(name); }, ms); }
   if (b.type === "mafia") {
-    if (st && a.status === "verdict" && fewer) sfx("bang");
-    if (st && b.status === "night") setTimeout(function () { sfx("night"); }, fewer ? 600 : 0);
-    else if (st && b.status === "day") sfx(fewer ? "bang" : "morning");
-    else if (st && (b.status === "vote" || b.status === "defense" || b.status === "verdict")) sfx("ding");
+    if (!st) return;
+    if (b.status === "night") { if (a.status === "verdict" && fewer) { sfx("bang"); later("eerie", 900); } else if (a.status === "verdict") { sfx("relief"); later("eerie", 900); } else sfx("eerie"); }
+    else if (b.status === "day") { if (fewer) sfx("bang"); else if (b.night && b.night.mafia) sfx("heal"); else sfx("morning"); }
+    else if (b.status === "vote" || b.status === "verdict") sfx("ding");
+    else if (b.status === "defense") sfx("dun");
+    else if (b.status === "result") {
+      if (a.status === "verdict" && fewer) { sfx("bang"); later(b.winner === "citizen" ? "fanfare" : "ominous", 800); }
+      else if (fewer) { sfx("bang"); later(b.winner === "citizen" ? "fanfare" : "ominous", 800); }
+      else sfx(b.winner === "citizen" ? "fanfare" : "ominous");
+    }
   } else if (b.type === "sketch") {
     if ((b.guessed || []).length > (a.guessed || []).length) sfx("correct");
     else if (st && b.status === "reveal") sfx("timeup");
-    if (b.status === "draw" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) setTimeout(function () { sfx("ding"); }, 300);
+    if (b.status === "draw" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) later("ding", 300);
+    if (st && b.status === "result") later("fanfare", 400);
   } else if (b.type === "smoke") {
     if (st && b.status === "play") sfx("go");
     else if (st && b.status === "shot") sfx("bang");
+    else if (st && b.status === "result") { sfx("bang"); later("fanfare", 700); }
   } else {
-    if (b.status === "hint" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) sfx("ding");
+    if (st && b.status === "hint" && a.status === "lobby") sfx("flip");
+    if (b.status === "hint" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) later("ding", st ? 350 : 0);
     else if (st && (b.status === "discuss" || b.status === "vote")) sfx("ding");
-    else if (st && b.status === "guess") sfx("correct");
+    else if (st && b.status === "guess") sfx("dun");
+    else if (st && b.status === "result") {
+      if (a.status === "vote") { sfx("sad"); later("sly", 1500); }
+      else sfx(b.winner === "team" ? "fanfare" : "sly");
+    }
   }
 }
 function sfxMsgs(snap) {
@@ -286,15 +325,28 @@ function sfxMsgs(snap) {
   });
   if (fresh && Date.now() - SND.lastPop > 300) { SND.lastPop = Date.now(); sfx("pop"); }
 }
-/* countdown ticks in the last seconds of a timed phase */
-const TICK_PHASES = { hint: 1, discuss: 1, vote: 1, guess: 1, night: 1, day: 1, defense: 1, verdict: 1, draw: 1, play: 1 };
-function sfxTimer(r, sec) {
+/* clock sounds while a phase runs: "clock" ticks the whole time (twice a second at the end), a number ticks only the last N seconds */
+const TICKS = {
+  mafia: { vote: "clock", defense: "clock", verdict: "clock", night: 10, day: 10 },
+  liar: { vote: "clock", guess: "clock", hint: 5, discuss: 10 },
+  sketch: { draw: 10 },
+  smoke: { play: 3 }
+};
+function sfxTimer(r, sec, leftMs) {
   const key = r.id + ":" + r.phase;
-  if (SND.lastKey !== key) { SND.lastKey = key; SND.lastSec = null; }
-  if (sec === SND.lastSec) return;
-  SND.lastSec = sec;
-  if (r.type === "smoke" && r.status === "ready") { if (sec >= 1 && sec <= 3) sfx("beep"); return; }
-  if (TICK_PHASES[r.status] && sec >= 1 && sec <= 5) sfx("tick");
+  if (SND.lastKey !== key) { SND.lastKey = key; SND.lastSec = null; SND.tickN = 0; }
+  if (r.type === "smoke" && r.status === "ready") {
+    if (sec !== SND.lastSec) { SND.lastSec = sec; if (sec >= 1 && sec <= 3) sfx("beep"); }
+    return;
+  }
+  const mode = (TICKS[r.type || "liar"] || {})[r.status];
+  if (!mode || leftMs <= 0) return;
+  const hot = leftMs <= 5000;
+  const unit = mode === "clock" && hot ? Math.ceil(leftMs / 500) * -1 : sec;   /* half seconds near the end */
+  if (unit === SND.lastSec) return;
+  SND.lastSec = unit;
+  if (mode === "clock") { SND.tickN = (SND.tickN || 0) + 1; sfx(hot ? "tickHot" : SND.tickN % 2 ? "tickA" : "tickB"); }
+  else if (sec >= 1 && sec <= mode) sfx(hot ? "tickHot" : "tickA");
 }
 
 /* Photos: one fixed zoom, bottom edge anchored, so faces come out the same size. */
@@ -849,6 +901,7 @@ async function readyToVote() {
 }
 async function castVote(target) {
   const me = meMember(); if (!me) return;
+  sfx("click");
   try {
     await updateDoc(roomRef(), { ["votes." + me.id]: target });
     await finalizeVotes(false);
@@ -922,7 +975,7 @@ setInterval(function () {
   if (end == null) return;
   const left = end - Date.now(), total = durOf(r) * 1000;
   const sec = Math.max(0, Math.ceil(left / 1000));
-  sfxTimer(r, sec);
+  sfxTimer(r, sec, left);
   document.querySelectorAll(".timer").forEach(function (el) {
     el.querySelector(".t-num").textContent = fmtSec(sec);
     el.querySelector(".t-bar i").style.width = Math.max(0, Math.min(100, left / total * 100)) + "%";
@@ -1221,6 +1274,9 @@ async function nightAct(role, target) {
       night[role] = target; patch.night = night;
       tx.update(roomRef(), patch);
     });
+    if (role === "mafia") sfx("cock");
+    else if (role === "doctor") sfx("ding");
+    else if (role === "police") { const rr = S.room; sfx(rr && dealRoles(rr.lineup, rr.seed)[target] === "mafia" ? "dun" : "relief"); }
     await resolveNight(false);
   } catch (e) {
     toast(e && e.code === "done" ? "오늘 밤 조사는 이미 했어요." : e && e.code === "phase" ? "밤이 끝났어요." : errText(e));
@@ -1267,6 +1323,7 @@ async function mafiaReady() {
 }
 async function mafiaVote(target) {
   const me = meMember(); if (!me) return;
+  sfx("click");
   try { await updateDoc(roomRef(), { ["votes." + me.id]: target }); await finalizeMafiaVote(false); }
   catch (e) { toast(errText(e)); }
 }
@@ -1302,6 +1359,7 @@ async function toVerdict(expectPhase) {
 }
 async function verdictVote(yes) {
   const me = meMember(); if (!me) return;
+  sfx(yes ? "cock" : "click");
   try { await updateDoc(roomRef(), { ["verdict." + me.id]: yes ? "yes" : "no" }); await finalizeVerdict(false); }
   catch (e) { toast(errText(e)); }
 }
@@ -1716,6 +1774,7 @@ async function skGuess(text) {
       } else tx.update(roomRef(), { guessed: ng, scores: scores });
     });
   } else {
+    sfx("click");
     await sendMsg("chat", text);
   }
 }
