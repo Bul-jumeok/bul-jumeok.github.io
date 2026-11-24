@@ -203,21 +203,49 @@ function sfx(name) {
   if (!SND.on) return;
   try { SFX[name](); } catch (e) {}
 }
-function breathStart() {
+function breathStart(L) {
+  if (EMU) (window.__sfxLog = window.__sfxLog || []).push("inhale");
   if (!SND.on) return;
   breathStop();
-  try { SND.breath = hiss(4, { filter: "bandpass", f: 500, fTo: 1400, q: 0.6, gain: 0.1, attack: 0.25, hold: true }); } catch (e) {}
+  L = L || 0;
+  const toFull = Math.max(0.05, (1 - L) / SM.fill);
+  try {
+    const b = hiss(toFull, { filter: "bandpass", f: 420 + 900 * L, fTo: 1350, q: 0.7, gain: 0.11, attack: 0.12, hold: true });
+    if (!b) return;
+    const c = b.c, now = c.currentTime, t = now + Math.max(0, (0.85 - L) / SM.fill);
+    const os = c.createOscillator(), og = c.createGain();
+    os.type = "triangle";
+    os.frequency.setValueAtTime(1700, t);
+    os.frequency.linearRampToValueAtTime(2500, t + 0.15 / SM.fill);
+    og.gain.setValueAtTime(0.0001, now);
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.linearRampToValueAtTime(0.03, t + 0.2);
+    os.connect(og); og.connect(c.destination);
+    os.start(now);
+    b.os = os; b.og = og;
+    SND.breath = b;
+  } catch (e) {}
 }
 function breathStop() {
   const b = SND.breath; if (!b) return;
   SND.breath = null;
   try {
     const t = b.c.currentTime;
-    b.g.gain.cancelScheduledValues(t);
-    b.g.gain.setValueAtTime(Math.max(0.0001, b.g.gain.value), t);
-    b.g.gain.linearRampToValueAtTime(0.0001, t + 0.08);
+    [b.g, b.og].forEach(function (g) {
+      if (!g) return;
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), t);
+      g.gain.linearRampToValueAtTime(0.0001, t + 0.08);
+    });
     b.src.stop(t + 0.1);
+    if (b.os) b.os.stop(t + 0.1);
   } catch (e) {}
+}
+function exhaleSound(L) {
+  if (EMU) (window.__sfxLog = window.__sfxLog || []).push("exhale");
+  if (!SND.on) return;
+  const dur = Math.max(0.12, ((L || 0) - SM.reArm) / SM.drain);
+  try { hiss(dur, { filter: "bandpass", f: 950, fTo: 420, q: 0.7, gain: 0.13, attack: 0.03 }); } catch (e) {}
 }
 /* sounds for what changed in a game room */
 function sfxRoom(a, b) {
@@ -2094,13 +2122,13 @@ function smPress(e) {
   if (Date.now() < SMK.coughUntil) return;
   if (SMK.L > SM.reArm) { smCough("덜 내쉬고 또 들이마셨어요!"); return; }
   SMK.holding = true;
-  breathStart();
+  breathStart(SMK.L);
   smLoop();
 }
 function smRelease() {
   if (!SMK.holding) return;
   SMK.holding = false;
-  breathStop(); sfx("exhale");
+  breathStop(); exhaleSound(SMK.L);
   smPuff();
   if (SK.pendingRender) { SK.pendingRender = false; render(); }
 }
@@ -2118,15 +2146,16 @@ function smPaint() {
   const st = SMK.stage;
   if (!st) return;
   const now = Date.now(), coughing = now < SMK.coughUntil;
-  const lung = st.querySelector(".sm-lung i"), cig = st.querySelector(".sm-cig"), msg = st.querySelector(".sm-msg"), btn = st.querySelector(".sm-btn");
-  if (lung) { lung.style.height = Math.min(100, SMK.L * 100) + "%"; lung.className = SMK.L >= 0.9 ? "hot" : SMK.L >= SM.deep ? "deep" : ""; }
-  if (cig) { cig.style.setProperty("--left", (100 - SMK.prog) + "%"); cig.classList.toggle("lit", SMK.holding); }
-  const pct = st.querySelector(".sm-pct"); if (pct) pct.textContent = Math.floor(SMK.prog) + "%";
+  const cig = st.querySelector(".sm-cig"), big = st.querySelector(".bc"), msg = st.querySelector(".sm-msg"), btn = st.querySelector(".sm-btn");
+  const left = Math.max(0, 100 - SMK.prog);
+  if (cig) { cig.style.setProperty("--left", left + "%"); cig.classList.toggle("lit", SMK.holding); }
+  if (big) { big.style.setProperty("--left", left); big.classList.toggle("lit", SMK.holding); big.classList.toggle("done", SMK.done); }
+  const pct = st.querySelector(".sm-pct"); if (pct) pct.textContent = Math.floor(SMK.prog) + "% 피움";
   if (msg) {
-    msg.textContent = SMK.done ? "다 피웠다! 다른 사람을 기다려요." : coughing ? "콜록콜록! " + SMK.coughWhy : SMK.holding ? (SMK.L >= 0.9 ? "위험! 이제 떼세요!" : SMK.L >= SM.deep ? "깊게 들이마시는 중… 빨리 타요" : "들이마시는 중…") : (SMK.L > SM.reArm ? "후— 내쉬는 중 (조금 더)" : "꾹 눌러서 들이마시세요");
+    msg.textContent = SMK.done ? "다 피웠다! 다른 사람을 기다려요." : coughing ? "콜록콜록! " + SMK.coughWhy : SMK.holding ? "스으읍…" : "소리를 듣고 감으로 피우세요";
     msg.className = "sm-msg" + (coughing ? " bad" : SMK.done ? " good" : "");
   }
-  if (btn) { btn.disabled = SMK.done || coughing; btn.classList.toggle("on", SMK.holding); btn.textContent = SMK.done ? "완료" : coughing ? "콜록…" : SMK.holding ? "들이마시는 중 (떼면 날숨)" : "꾹 눌러 들이마시기"; }
+  if (btn) { btn.disabled = SMK.done || coughing; btn.classList.toggle("on", SMK.holding); btn.textContent = SMK.done ? "완료" : coughing ? "콜록…" : SMK.holding ? "스으읍… (떼면 날숨)" : "꾹 눌러 들이마시기"; }
 }
 function smUpdateLanes() {
   const host = SMK.stage && SMK.stage.querySelector(".sm-lanes");
@@ -2163,9 +2192,9 @@ function smStageFor(r) {
     h("div", { class: "sm-char" }, h("div", { class: "sm-face" }, photoBox(me)),
       h("div", { class: "sm-cig" }, h("span", { class: "ash" }), h("span", { class: "body" }), h("span", { class: "filter" })),
       h("div", { class: "sm-smoke" })),
-    h("div", { class: "sm-side" },
-      h("div", { class: "sm-lung", "aria-label": "폐 게이지" }, h("i"), h("span", { class: "z-deep" }), h("span", { class: "z-arm" })),
-      h("div", { class: "sm-legend" }, h("b", { class: "sm-pct", text: "0%" }), h("span", { text: "빨간 선 넘으면 기침" })))) : null;
+    h("div", { class: "sm-big", "aria-label": "내 담배" },
+      h("div", { class: "bc" }, h("span", { class: "bc-filter" }), h("span", { class: "bc-body" }), h("span", { class: "bc-ember" }), h("span", { class: "bc-ash" })),
+      h("span", { class: "sm-pct", text: "0% 피움" }))) : null;
   SMK.stage = h("div", { class: "sm-stage" },
     mine,
     playing ? h("p", { class: "sm-msg", text: r.status === "ready" ? "곧 시작해요. 준비!" : "꾹 눌러서 들이마시세요" }) : null,
@@ -2205,8 +2234,8 @@ function screenSmokeLobby() {
       h("div", { class: "guide-body" },
         h("ol", null,
           h("li", { text: "버튼을 꾹 누르고 있으면 들숨, 떼면 날숨이에요. 들이마시는 동안만 담배가 타요." }),
-          h("li", { text: "폐 게이지가 초록 구간까지 차면 깊게 마셔서 더 빨리 타요. 빨간 선을 넘기면 콜록! 2초 동안 못 피워요." }),
-          h("li", { text: "떼고 나면 게이지가 흰 선 아래로 내려갈 때까지 내쉬어야 해요. 덜 내쉬고 또 누르면 콜록!" }),
+          h("li", { text: "숨이 얼마나 찼는지는 화면에 안 나와요. 들이마시는 소리가 높아질수록 꽉 찬 거예요. 깊게 마실수록 더 빨리 타지만, 너무 오래 마시면 콜록! 2초 동안 못 피워요." }),
+          h("li", { text: "떼면 ‘후~’ 하고 내쉬어요. 그 소리가 끝나기 전에 또 누르면 콜록! 소리를 잘 듣고 감으로 리듬을 타세요." }),
           h("li", { text: "한 개비를 먼저 다 피운 순서대로 순위가 정해져요. 40초 안에 못 피우면 많이 피운 순서예요." }),
           h("li", { text: "라운드마다 꼴찌는 킬러에게 탕! 마지막 1인이 남을 때까지 계속해요." })))));
 }
