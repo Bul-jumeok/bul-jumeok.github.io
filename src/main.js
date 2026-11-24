@@ -1362,7 +1362,7 @@ const INKS = ["#1b1b1d", "#d2382f", "#2f6fd2", "#2f9e57", "#e2a21b", "#8a4fc9", 
 const SK = { canvas: null, ctx: null, turnKey: null, unsub: null, strokes: [], drawing: false, pendingRender: false, cur: null, color: INKS[0], size: 8, eraser: false, flushT: null };
 
 /* Surprise names: never announced in the UI. Default list until the boss saves one. */
-const SK_DEFAULT_NAMES = ["효니", "3232", "우디", "뉴햄찌", "유나룽", "쏘기", "르네모", "뉴히쵸", "주먹이", "샤리", "지금이(지순이)", "루나"];
+const SK_DEFAULT_NAMES = ["주먹이"];
 const SK_SURPRISE = 0.2;
 function skCrewWords() {
   const seen = {}, out = [];
@@ -1649,7 +1649,8 @@ function skNamesPanel() {
   return h("details", { class: "guide" },
     h("summary", { text: "깜짝 제시어 이름 · 두목만 보여요" }),
     h("div", { class: "guide-body" },
-      h("p", { class: "note", text: "다섯 판에 한 번꼴로 이 이름들이나 조직원 닉네임이 제시어로 나와요. 조직원들에게는 비밀이에요." }),
+      h("p", { class: "note", text: "다섯 판에 한 번꼴로 조직원 닉네임이나 아래 이름이 제시어로 나와요. 조직원 닉네임은 명부에서 자동으로 들어가요. 조직원들에게는 비밀이에요." }),
+      h("p", { class: "sub-label", text: "추가로 넣을 이름" }),
       ta,
       h("button", { type: "button", class: "save", onclick: async function () {
         const seen = {};
@@ -1659,14 +1660,14 @@ function skNamesPanel() {
         catch (e) { toast(errText(e)); }
       }, text: "저장" })));
 }
-/* The old liar topic of crew names moves to the sketch surprise list (once, on the boss's phone). */
+/* The old liar topic of crew names is removed (once, on the boss's phone); names live only in the drawing quiz. */
 async function migrateCrewTopic() {
   if (S.migrated || !isBoss() || !S.sketchKnown) return;
   const t = S.topics.find(function (x) { return x.name === "우리끼리 이름"; });
   if (!t) return;
   S.migrated = true;
   try {
-    if (!S.sketchNames) await setDoc(doc(db, "config", "sketch"), { names: t.words || [] });
+    if (!S.sketchNames) await setDoc(doc(db, "config", "sketch"), { names: SK_DEFAULT_NAMES });
     await deleteDoc(doc(db, "liarTopics", t.id));
   } catch (e) { S.migrated = false; }
 }
