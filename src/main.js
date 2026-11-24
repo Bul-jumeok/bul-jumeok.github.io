@@ -462,7 +462,8 @@ const GAMES = [
   { id: "mafia", code: "G-02", name: "마피아", desc: "조직 안에 조직이 있다. 밤마다 한 명씩.", ready: true },
   { id: "yut", code: "G-03", name: "윷놀이", desc: "도·개·걸·윷·모로 가리는 본부 서열.", ready: false },
   { id: "liar", code: "G-04", name: "라이어", desc: "혼자만 제시어를 모르는 사람을 찾아라.", ready: true },
-  { id: "sketch", code: "G-05", name: "드로잉퀴즈", desc: "한 명은 그리고, 나머지는 맞혀라.", ready: true }
+  { id: "sketch", code: "G-05", name: "드로잉퀴즈", desc: "한 명은 그리고, 나머지는 맞혀라.", ready: true },
+  { id: "smoke", code: "G-06", name: "빨리 담배피기", desc: "들숨 날숨 타이밍 싸움. 꼴찌는 킬러가 처리한다.", ready: true }
 ];
 function screenGames() {
   return h("section", { class: "screen" },
@@ -528,7 +529,7 @@ async function createRoom(type) {
   if (!me || !S.user) return;
   try {
     const ref = await addDoc(collection(db, "rooms"), {
-      type: type === "mafia" || type === "sketch" ? type : "liar",
+      type: type === "mafia" || type === "sketch" || type === "smoke" ? type : "liar",
       status: "lobby", createdAt: serverTimestamp(), createdBy: me.id, players: [me.id],
       mode: 0, topicChoice: -1, rounds: 1, game: 0, votes: {}, turn: 0
     });
@@ -666,7 +667,7 @@ async function submitGuess(text, timedOut, expectPhase) {
 /* ---------- Liar: phase timers ---------- */
 const GRACE_MS = 1500;
 let lastTimeoutKey = "";
-function durOf(r) { return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : DUR)[r && r.status]; }
+function durOf(r) { return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : r && r.type === "smoke" ? SMDUR : DUR)[r && r.status]; }
 function phaseEnd(r) {
   if (!r || !durOf(r) || !r.phaseAt || !r.phaseAt.toMillis) return null;
   return r.phaseAt.toMillis() + durOf(r) * 1000;
@@ -683,6 +684,7 @@ function timerEl(r, label) {
 async function onTimeout(r) {
   if (r.type === "mafia") return mafiaTimeout(r);
   if (r.type === "sketch") return sketchTimeout(r);
+  if (r.type === "smoke") return smokeTimeout(r);
   if (r.status === "hint") return advanceTurn("timeout", null, r.phase);
   if (r.status === "discuss") return toVote(r.phase);
   if (r.status === "vote") return finalizeVotes(true, r.phase);
@@ -707,7 +709,7 @@ setInterval(function () {
   }
 }, 500);
 async function backToLobby() {
-  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false });
+  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false, board: [], shot: null, round: 0, rk: 0, out: [] });
 }
 
 function screenRoom(id) {
@@ -719,6 +721,7 @@ function screenRoom(id) {
   if (r.status === "closed") return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "이 방은 닫혔어요. 새 방을 만들어 주세요." }));
   if (r.type === "mafia") return screenMafiaRoom(r);
   if (r.type === "sketch") return screenSketchRoom(r);
+  if (r.type === "smoke") return screenSmokeRoom(r);
 
   const me = meMember();
   const players = r.players || [];
@@ -1782,6 +1785,353 @@ function skChat(r, me, iDraw) {
   return h("div", { class: "field" }, h("div", { class: "field-label", text: r.status === "draw" ? "정답 맞히기" : "대화" }), log, f);
 }
 
+
+/* ---------- Smoke race (빨리 담배피기): hold to inhale, release to exhale ---------- */
+const SMDUR = { ready: 3, play: 40, shot: 5 };
+if (FAST) Object.keys(SMDUR).forEach(function (k) { SMDUR[k] = Math.max(2, Math.round(SMDUR[k] / FAST)); });
+const SM = {
+  fill: 0.6,      /* lungs per second while inhaling */
+  drain: 0.9,     /* lungs per second while exhaling */
+  burn: 5,        /* % of the cigarette per second while inhaling */
+  deep: 0.55,     /* from here inhaling burns faster */
+  deepMult: 1.6,
+  reArm: 0.3,     /* must breathe out below this before inhaling again */
+  coughMs: 2000,
+  coughLoss: 3
+};
+const KILLER_LINES = ["꼴찌는 용서 못 해.", "담배 하나 제대로 못 피우나?", "본부에 꼴찌 자리는 없다.", "다음 생엔 폐활량부터 키워라.", "연기만 뿜다 가는구나."];
+const SMK = { rk: null, unsub: null, live: {}, holding: false, L: 0, prog: 0, coughUntil: 0, coughWhy: "", done: false, fin: null,
+  lastSend: 0, lastT: 0, raf: 0, stage: null, stageKey: null };
+
+function smLiveId(rk, m) { return rk + "_" + m; }
+function smWatch(rk) {
+  if (SMK.rk === rk) return;
+  if (SMK.unsub) { SMK.unsub(); SMK.unsub = null; }
+  SMK.rk = rk; SMK.live = {};
+  if (rk == null || !S.roomId) return;
+  SMK.unsub = onSnapshot(query(collection(db, "rooms", S.roomId, "live"), where("rk", "==", rk)), function (snap) {
+    const live = {};
+    snap.docs.forEach(function (d) { const v = d.data(); live[v.m] = v; });
+    SMK.live = live;
+    smUpdateLanes();
+    const r = S.room;
+    if (r && r.type === "smoke" && r.status === "play" && (r.alive || []).every(function (m) { return live[m] && live[m].done; })) smEndRound(false, r.phase).catch(function () {});
+  });
+}
+async function smStart() {
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "lobby") throw { code: "phase" };
+      const lineup = (r.players || []).filter(function (p) { return !!findMember(p); }).slice().sort();
+      if (lineup.length < 2) throw { code: "few" };
+      const game = (r.game || 0) + 1;
+      sysMsg(tx, { game: game }, "🚬 빨리 담배피기 시작! 꼴찌는 킬러가 처리합니다.");
+      tx.update(roomRef(), nextPhase(r, { status: "ready", lineup: lineup, alive: lineup, out: [], round: 1, rk: game * 100 + 1, board: [], shot: null, winner: null, game: game, startedAt: serverTimestamp() }));
+    });
+  } catch (e) {
+    if (e && e.code === "few") toast("2명 이상 모여야 시작할 수 있어요.");
+    else if (e && e.code === "phase") toast("이미 게임이 시작됐어요.");
+    else toast(errText(e));
+  }
+}
+async function smToPlay(expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "ready" || (expectPhase != null && r.phase !== expectPhase)) return;
+    tx.update(roomRef(), nextPhase(r, { status: "play" }));
+  });
+}
+async function smEndRound(force, expectPhase) {
+  const roomId = S.roomId;
+  await runTransaction(db, async function (tx) {
+    const ref = doc(db, "rooms", roomId);
+    const snap = await tx.get(ref); const r = snap.data();
+    if (!r || r.status !== "play" || (expectPhase != null && r.phase !== expectPhase)) return;
+    const alive = r.alive || [];
+    const docs = await Promise.all(alive.map(function (m) { return tx.get(doc(db, "rooms", roomId, "live", smLiveId(r.rk, m))); }));
+    const st = alive.map(function (m, i) {
+      const d = docs[i].exists() ? docs[i].data() : {};
+      return { m: m, done: !!d.done, fin: d.done ? (d.fin || 0) : null, prog: Math.min(100, Math.round(d.prog || 0)) };
+    });
+    if (!force && st.some(function (x) { return !x.done; })) return;
+    st.sort(function (a, b) {
+      if (a.done !== b.done) return a.done ? -1 : 1;
+      if (a.done) return a.fin - b.fin;
+      return b.prog - a.prog || (a.m < b.m ? -1 : 1);
+    });
+    const loser = st[st.length - 1].m;
+    const left = alive.filter(function (m) { return m !== loser; });
+    const out = (r.out || []).concat([loser]);
+    sysMsg(tx, r, "💥 탕! " + r.round + "라운드 꼴찌 " + nickOf(loser) + "님 탈락.");
+    if (left.length <= 1) {
+      sysMsg(tx, r, "👑 최후의 1인 " + nickOf(left[0]) + "! 모두 무릎 꿇어라.");
+      tx.update(ref, nextPhase(r, { status: "result", alive: left, out: out, board: st, shot: loser, winner: left[0] || null }));
+    } else {
+      tx.update(ref, nextPhase(r, { status: "shot", alive: left, out: out, board: st, shot: loser, line: KILLER_LINES[Math.floor(Math.random() * KILLER_LINES.length)] }));
+    }
+  });
+}
+async function smNextRound(expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "shot" || (expectPhase != null && r.phase !== expectPhase)) return;
+    const round = (r.round || 1) + 1;
+    sysMsg(tx, r, "🚬 " + round + "라운드! 남은 사람 " + (r.alive || []).length + "명.");
+    tx.update(roomRef(), nextPhase(r, { status: "ready", round: round, rk: (r.game || 0) * 100 + round, board: [], shot: null }));
+  });
+}
+function smokeTimeout(r) {
+  if (r.status === "ready") return smToPlay(r.phase);
+  if (r.status === "play") return smEndRound(true, r.phase);
+  if (r.status === "shot") return smNextRound(r.phase);
+}
+
+/* local breathing simulation; only progress is shared */
+function smMe() { const r = S.room, me = meMember(); return r && me && r.status === "play" && (r.alive || []).indexOf(me.id) >= 0 ? me : null; }
+function smReset() { SMK.L = 0; SMK.prog = 0; SMK.coughUntil = 0; SMK.done = false; SMK.fin = null; SMK.holding = false; SMK.lastSend = 0; }
+function smSend(force) {
+  const me = smMe(), r = S.room;
+  if (!me) return;
+  const now = Date.now();
+  if (!force && now - SMK.lastSend < 450) return;
+  SMK.lastSend = now;
+  setDoc(doc(db, "rooms", S.roomId, "live", smLiveId(r.rk, me.id)), {
+    uid: myUid(), rk: r.rk, m: me.id, prog: Math.round(SMK.prog * 10) / 10, cough: now < SMK.coughUntil, done: SMK.done, fin: SMK.fin
+  }).catch(function () {});
+}
+function smCough(why) {
+  SMK.coughUntil = Date.now() + SM.coughMs; SMK.coughWhy = why; SMK.L = 0; SMK.holding = false;
+  SMK.prog = Math.max(0, SMK.prog - SM.coughLoss);
+  try { if (navigator.vibrate) navigator.vibrate(180); } catch (e) {}
+  smSend(true);
+  if (SK.pendingRender) { SK.pendingRender = false; render(); }
+}
+function smTick(t) {
+  SMK.raf = 0;
+  const me = smMe();
+  if (!me) return;
+  const dt = Math.min(0.1, SMK.lastT ? (t - SMK.lastT) / 1000 : 0); SMK.lastT = t;
+  const now = Date.now();
+  if (!SMK.done) {
+    if (now < SMK.coughUntil) SMK.L = Math.max(0, SMK.L - SM.drain * dt);
+    else if (SMK.holding) {
+      SMK.L += SM.fill * dt;
+      SMK.prog = Math.min(100, SMK.prog + SM.burn * (SMK.L >= SM.deep ? SM.deepMult : 1) * dt);
+      if (SMK.L >= 1) smCough("너무 오래 들이마셨어요!");
+    } else SMK.L = Math.max(0, SMK.L - SM.drain * dt);
+    if (SMK.prog >= 100 && !SMK.done) {
+      SMK.done = true; SMK.holding = false;
+      const r = S.room;
+      SMK.fin = r.phaseAt && r.phaseAt.toMillis ? now - r.phaseAt.toMillis() : 0;
+      smSend(true);
+      if (SK.pendingRender) { SK.pendingRender = false; render(); }
+    }
+  }
+  smSend(false);
+  smPaint();
+  SMK.raf = requestAnimationFrame(smTick);
+}
+function smLoop() { if (!SMK.raf && smMe()) { SMK.lastT = 0; SMK.raf = requestAnimationFrame(smTick); } }
+function smPress(e) {
+  if (e) e.preventDefault();
+  if (!smMe() || SMK.done) return;
+  if (Date.now() < SMK.coughUntil) return;
+  if (SMK.L > SM.reArm) { smCough("덜 내쉬고 또 들이마셨어요!"); return; }
+  SMK.holding = true;
+  smLoop();
+}
+function smRelease() {
+  if (!SMK.holding) return;
+  SMK.holding = false;
+  smPuff();
+  if (SK.pendingRender) { SK.pendingRender = false; render(); }
+}
+function smPuff() {
+  const host = SMK.stage && SMK.stage.querySelector(".sm-smoke");
+  if (!host || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+  for (let i = 0; i < 3; i++) {
+    const p = h("i", { class: "puff" });
+    p.style.left = (10 + Math.random() * 30) + "px"; p.style.animationDelay = (i * 0.12) + "s";
+    host.appendChild(p);
+    setTimeout(function () { p.remove(); }, 1800);
+  }
+}
+function smPaint() {
+  const st = SMK.stage;
+  if (!st) return;
+  const now = Date.now(), coughing = now < SMK.coughUntil;
+  const lung = st.querySelector(".sm-lung i"), cig = st.querySelector(".sm-cig"), msg = st.querySelector(".sm-msg"), btn = st.querySelector(".sm-btn");
+  if (lung) { lung.style.height = Math.min(100, SMK.L * 100) + "%"; lung.className = SMK.L >= 0.9 ? "hot" : SMK.L >= SM.deep ? "deep" : ""; }
+  if (cig) { cig.style.setProperty("--left", (100 - SMK.prog) + "%"); cig.classList.toggle("lit", SMK.holding); }
+  const pct = st.querySelector(".sm-pct"); if (pct) pct.textContent = Math.floor(SMK.prog) + "%";
+  if (msg) {
+    msg.textContent = SMK.done ? "다 피웠다! 다른 사람을 기다려요." : coughing ? "콜록콜록! " + SMK.coughWhy : SMK.holding ? (SMK.L >= 0.9 ? "위험! 이제 떼세요!" : SMK.L >= SM.deep ? "깊게 들이마시는 중… 빨리 타요" : "들이마시는 중…") : (SMK.L > SM.reArm ? "후— 내쉬는 중 (조금 더)" : "꾹 눌러서 들이마시세요");
+    msg.className = "sm-msg" + (coughing ? " bad" : SMK.done ? " good" : "");
+  }
+  if (btn) { btn.disabled = SMK.done || coughing; btn.classList.toggle("on", SMK.holding); btn.textContent = SMK.done ? "완료" : coughing ? "콜록…" : SMK.holding ? "들이마시는 중 (떼면 날숨)" : "꾹 눌러 들이마시기"; }
+}
+function smUpdateLanes() {
+  const host = SMK.stage && SMK.stage.querySelector(".sm-lanes");
+  const r = S.room;
+  if (!host || !r) return;
+  const me = meMember();
+  host.replaceChildren.apply(host, (r.lineup || []).map(function (m) {
+    const out = (r.alive || []).indexOf(m) < 0;
+    const v = SMK.live[m] || {};
+    const isMe = me && m === me.id && !out;
+    const prog = isMe ? SMK.prog : (v.prog || 0);
+    const cough = isMe ? Date.now() < SMK.coughUntil : v.cough;
+    const done = isMe ? SMK.done : v.done;
+    const bar = h("span", { class: "sl-cig" }, h("i")); bar.firstChild.style.width = (100 - Math.min(100, prog)) + "%";
+    return h("div", { class: "sm-lane" + (out ? " out" : "") + (isMe ? " me" : "") },
+      h("div", { class: "sl-photo" }, photoBox(findMember(m) || {})),
+      h("div", { class: "sl-body" },
+        h("div", { class: "sl-top" }, h("b", { text: (out ? "☠ " : "") + nickOf(m) }),
+          h("span", { class: "sl-state" + (cough ? " bad" : done ? " good" : ""), text: out ? "탈락" : done ? "완료" : cough ? "콜록!" : Math.floor(prog) + "%" })),
+        bar));
+  }));
+}
+function smStageFor(r) {
+  const key = r.rk + ":" + r.status;
+  if (SMK.stage && SMK.stageKey === key) return SMK.stage;
+  SMK.stageKey = key;
+  const me = meMember();
+  const playing = me && (r.alive || []).indexOf(me.id) >= 0;
+  const btn = h("button", { type: "button", class: "sm-btn", disabled: r.status !== "play" });
+  btn.addEventListener("pointerdown", function (e) { try { btn.setPointerCapture(e.pointerId); } catch (err) {} smPress(e); });
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach(function (ev) { btn.addEventListener(ev, smRelease); });
+  btn.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  const mine = playing ? h("div", { class: "sm-me" },
+    h("div", { class: "sm-char" }, h("div", { class: "sm-face" }, photoBox(me)),
+      h("div", { class: "sm-cig" }, h("span", { class: "ash" }), h("span", { class: "body" }), h("span", { class: "filter" })),
+      h("div", { class: "sm-smoke" })),
+    h("div", { class: "sm-side" },
+      h("div", { class: "sm-lung", "aria-label": "폐 게이지" }, h("i"), h("span", { class: "z-deep" }), h("span", { class: "z-arm" })),
+      h("div", { class: "sm-legend" }, h("b", { class: "sm-pct", text: "0%" }), h("span", { text: "빨간 선 넘으면 기침" })))) : null;
+  SMK.stage = h("div", { class: "sm-stage" },
+    mine,
+    playing ? h("p", { class: "sm-msg", text: r.status === "ready" ? "곧 시작해요. 준비!" : "꾹 눌러서 들이마시세요" }) : null,
+    playing ? btn : null,
+    h("div", { class: "sm-lanes" }));
+  if (r.status === "play" || r.status === "ready") { if (SMK.lastRk !== r.rk) { SMK.lastRk = r.rk; smReset(); } }
+  smUpdateLanes(); smPaint();
+  return SMK.stage;
+}
+document.addEventListener("keydown", function (e) { if (e.code === "Space" && smMe() && !e.repeat && !/INPUT|TEXTAREA/.test((e.target && e.target.tagName) || "")) { e.preventDefault(); smPress(); } });
+document.addEventListener("keyup", function (e) { if (e.code === "Space") smRelease(); });
+
+function screenSmokeLobby() {
+  const me = meMember();
+  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type === "smoke"; });
+  const list = rooms.length
+    ? h("ul", { class: "room-list" }, rooms.map(function (r) {
+        const mine = me && (r.players || []).indexOf(me.id) >= 0;
+        const label = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : "게임 중";
+        return h("li", null, h("button", { type: "button", class: "room-item", onclick: function () { go("room-" + r.id); } },
+          h("span", { class: "ri-main" }, h("b", { text: nickOf(r.createdBy) + "의 방" }),
+            h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
+          h("span", { class: "ri-side" }, h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
+            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+      }))
+    : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
+  return h("section", { class: "screen" },
+    h("button", { class: "back", type: "button", onclick: function () { go("games"); }, text: "게임방으로" }),
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: "G-06" }), h("h2", { text: "빨리 담배피기" }),
+        h("p", { text: "들숨 날숨 타이밍 싸움. 라운드마다 꼴찌는 킬러가 처리하고, 최후의 1인이 형님이 된다." }))),
+    h("button", { type: "button", class: "save", disabled: !me || !S.user, onclick: function () { createRoom("smoke"); } },
+      me ? "새 방 만들기" : "신원을 고른 조직원만 방을 만들 수 있어요"),
+    h("div", { class: "field" }, h("div", { class: "field-label", text: "열린 방" }), list),
+    h("details", { class: "guide" },
+      h("summary", { text: "빨리 담배피기 규칙" }),
+      h("div", { class: "guide-body" },
+        h("ol", null,
+          h("li", { text: "버튼을 꾹 누르고 있으면 들숨, 떼면 날숨이에요. 들이마시는 동안만 담배가 타요." }),
+          h("li", { text: "폐 게이지가 초록 구간까지 차면 깊게 마셔서 더 빨리 타요. 빨간 선을 넘기면 콜록! 2초 동안 못 피워요." }),
+          h("li", { text: "떼고 나면 게이지가 흰 선 아래로 내려갈 때까지 내쉬어야 해요. 덜 내쉬고 또 누르면 콜록!" }),
+          h("li", { text: "한 개비를 먼저 다 피운 순서대로 순위가 정해져요. 40초 안에 못 피우면 많이 피운 순서예요." }),
+          h("li", { text: "라운드마다 꼴찌는 킬러에게 탕! 마지막 1인이 남을 때까지 계속해요." })))));
+}
+function screenSmokeRoom(r) {
+  const back = h("button", { class: "back", type: "button", onclick: function () { go("game-smoke"); }, text: "빨리 담배피기 방 목록" });
+  const me = meMember();
+  const players = r.players || [];
+  const inRoom = me && players.indexOf(me.id) >= 0;
+  const playing = r.status !== "lobby";
+  smWatch(playing ? r.rk : null);
+  const title = r.status === "lobby" ? "대기 중" : r.status === "result" ? "최후의 1인" : r.round + "라운드" + (r.status === "ready" ? " 준비" : r.status === "shot" ? " 처형" : "");
+  const head = h("div", { class: "room-head" },
+    h("div", null, h("span", { class: "eyebrow", text: "빨리 담배피기 · " + nickOf(r.createdBy) + "의 방" }), h("h2", { text: title })),
+    playing ? h("span", { class: "mode-chip", text: "생존 " + (r.alive || []).length + "명" }) : null);
+  let body;
+  if (r.status === "lobby") {
+    const n = players.length;
+    body = h("div", { class: "panel" },
+      h("div", { class: "field-label", text: "모인 사람 " + n + "명" }),
+      h("div", { class: "chips" }, players.map(function (p) { return h("span", { class: "chip static" + (me && p === me.id ? " me" : ""), text: nickOf(p) }); })),
+      h("p", { class: "note", text: "라운드마다 꼴찌 한 명이 탈락해요. " + Math.max(1, n - 1) + "라운드면 최후의 1인이 나와요." }),
+      !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
+        : inRoom
+          ? h("div", { class: "op-row" },
+              h("button", { type: "button", onclick: leaveRoom, text: "방 나가기" }),
+              h("button", { type: "button", class: "go", disabled: n < 2, onclick: smStart, text: n >= 2 ? "게임 시작" : "2명부터 시작" }))
+          : h("button", { type: "button", class: "save", onclick: joinRoom, text: "이 방에 참가하기" }),
+      h("p", { class: "hint", text: "단톡방에 ‘게임방 → 빨리 담배피기 방 열었어’라고 알려주세요." }));
+  } else if (r.status === "ready" || r.status === "play") {
+    body = [h("div", { class: "panel turn" + (r.status === "play" ? " mine" : "") },
+      timerEl(r, r.status === "ready" ? "시작까지" : "남은 시간")), smStageFor(r)];
+    if (r.status === "play") smLoop();
+  } else if (r.status === "shot") {
+    const loser = findMember(r.shot) || { nick: nickOf(r.shot) };
+    body = h("div", { class: "panel shot" },
+      h("div", { class: "shot-scene" },
+        h("div", { class: "killer", "aria-hidden": "true", text: "🕴️🔫" }),
+        h("div", { class: "victim" }, h("div", { class: "v-photo" }, photoBox(loser)), h("span", { class: "bang", text: "탕!" }))),
+      h("p", { class: "shot-line" }, "킬러: “" + (r.line || KILLER_LINES[0]) + "”"),
+      h("p", null, h("b", { text: loser.nick }), "님 탈락."),
+      smBoard(r), timerEl(r, "다음 라운드까지"));
+  } else {
+    const w = findMember(r.winner) || { nick: nickOf(r.winner) };
+    body = h("div", { class: "panel result-smoke" },
+      h("div", { class: "winner" }, h("span", { class: "crown", "aria-hidden": "true", text: "👑" }), h("div", { class: "w-photo" }, photoBox(w)),
+        h("div", { class: "w-name", text: w.nick }), h("div", { class: "eyebrow", text: "최후의 1인 · 오늘의 형님" })),
+      h("div", { class: "kneel" }, (r.out || []).slice().reverse().map(function (m) {
+        const mm = findMember(m) || { nick: nickOf(m) };
+        return h("div", { class: "kn" }, h("span", { class: "kn-say", text: "형님…" }), h("div", { class: "kn-photo" }, photoBox(mm)),
+          h("span", { class: "kn-name", text: "🙇 " + mm.nick }));
+      })),
+      h("div", { class: "op-row" },
+        h("button", { type: "button", onclick: function () { go("game-smoke"); }, text: "방 목록" }),
+        h("button", { type: "button", class: "go", onclick: backToLobby, text: "같은 방에서 한 판 더" })));
+  }
+  return h("section", { class: "screen room" }, back, head, body, smChat(r, me));
+}
+function smBoard(r) {
+  return h("ol", { class: "sm-board" }, (r.board || []).map(function (x) {
+    return h("li", { class: x.m === r.shot ? "dead" : "" }, h("span", { text: nickOf(x.m) }),
+      h("b", { text: x.done ? (x.fin / 1000).toFixed(1) + "초" : x.prog + "%" }));
+  }));
+}
+function smChat(r, me) {
+  const game = r.game || 0;
+  const msgs = S.msgs.filter(function (m) { return (m.game || 0) === game; }).slice(-60);
+  const log = h("div", { class: "log", role: "log", "aria-live": "polite" },
+    msgs.length ? msgs.map(function (m) {
+      if (m.kind === "sys") return h("div", { class: "msg-sys strong", text: m.text });
+      return h("div", { class: "bubble chat" + (me && m.memberId === me.id ? " mine" : "") },
+        h("div", { class: "b-meta" }, h("b", { text: m.nick || "손님" })), h("div", { class: "b-text", text: m.text }));
+    }) : h("div", { class: "msg-sys", text: "아직 대화가 없어요." }));
+  const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "80", placeholder: "응원·도발 보내기", autocomplete: "off" });
+  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm", text: "보내기" }));
+  f.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = inp.value.trim(); if (!t || !S.user) return;
+    try { await sendMsg("chat", t); S.drafts["chat-text"] = ""; render(); } catch (e) { toast(errText(e)); }
+  });
+  return h("div", { class: "field" }, h("div", { class: "field-label", text: "대화" }), log, f);
+}
+
 /* ---------- Liar: custom topics (boss) ---------- */
 function topicManager() {
   return h("div", { class: "panel" },
@@ -1997,7 +2347,7 @@ function render() {
   requestAnimationFrame(function () { queued = false; draw(); });
 }
 function draw() {
-  if (SK.drawing) { SK.pendingRender = true; return; }
+  if (SK.drawing || SMK.holding) { SK.pendingRender = true; return; }
   migrateCrewTopic();
   const active = document.activeElement;
   const aid = active && active.id && main.contains(active) ? active.id : null;
@@ -2017,10 +2367,11 @@ function draw() {
   else if (r === "game-liar") { tab = "games"; view = screenLiarLobby(); }
   else if (r === "game-mafia") { tab = "games"; view = screenMafiaLobby(); }
   else if (r === "game-sketch") { tab = "games"; view = screenSketchLobby(); }
+  else if (r === "game-smoke") { tab = "games"; view = screenSmokeLobby(); }
   else if (r.indexOf("room-") === 0) { tab = "games"; view = screenRoom(r.slice(5)); }
   else if (r === "guestbook") { tab = "guestbook"; view = screenGuestbook(); }
   else view = screenHQ();
-  if (r.indexOf("room-") !== 0) { watchRoom(null); skWatch(null); }
+  if (r.indexOf("room-") !== 0) { watchRoom(null); skWatch(null); smWatch(null); }
   if (r !== lastRoute) S.confirmDelete = false;
 
   const gate = S.membersReady && needsGate();
