@@ -473,7 +473,7 @@ function screenGames() {
 const STATUS_LABEL = { lobby: "대기 중", hint: "설명 중", discuss: "토론 중", vote: "투표 중", guess: "라이어 반격", result: "결과 발표" };
 /* Seconds per phase. ?emu&fast shortens them for local tests. */
 const FAST = EMU && new URLSearchParams(location.search).has("fast");
-const DUR = { hint: 30, discuss: 120, vote: 30, guess: 20 };
+const DUR = { hint: 20, discuss: 120, vote: 20, guess: 20 };
 if (FAST) Object.keys(DUR).forEach(function (k) { DUR[k] = Math.max(2, Math.round(DUR[k] / 10)); });
 function screenLiarLobby() {
   const me = meMember();
@@ -509,9 +509,9 @@ function liarRules() {
         h("li", { text: "방을 만들고 단톡방에 알려요. 다들 게임방 → 라이어에서 그 방을 눌러 참가해요." }),
         h("li", { text: "3명 이상 모이면 아무나 ‘게임 시작’을 눌러요. 만든 사람도 라이어가 누군지 몰라요." }),
         h("li", { text: "각자 카드를 몰래 확인해요. 라이어에게는 주제만 보여요." }),
-        h("li", { text: "랜덤 순서로 한 명씩 제시어를 한 마디로 설명해요. 한 사람당 30초, 시간이 지나면 다음 사람으로 넘어가요." }),
+        h("li", { text: "랜덤 순서로 한 명씩 제시어를 한 마디로 설명해요. 한 사람당 20초, 시간이 지나면 다음 사람으로 넘어가요." }),
         h("li", { text: "설명이 끝나면 2분 동안 대화창에서 토론해요. 절반 이상이 ‘바로 투표하기’를 누르면 일찍 끝나요." }),
-        h("li", { text: "30초 안에 라이어로 의심되는 사람에게 투표해요." }),
+        h("li", { text: "20초 안에 라이어로 의심되는 사람에게 투표해요." }),
         h("li", { text: "라이어를 맞히면 라이어에게 20초의 마지막 기회가 있어요. 제시어를 맞히면 라이어 승리, 못 맞히면 조직원 승리. 동점이거나 엉뚱한 사람을 지목하면 라이어 승리예요." })),
       h("p", { class: "note", text: "바보 모드에서는 라이어도 같은 주제의 다른 단어를 받아서, 자기가 라이어인지 모른 채 설명해요." })));
 }
