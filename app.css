@@ -578,3 +578,27 @@ img { max-width: 100%; }
 .timer.low .t-num { color: var(--red); }
 .timer.low .t-bar i { background: var(--red); }
 @media (prefers-reduced-motion: reduce) { .t-bar i { transition: none; } }
+
+/* mafia */
+.chip.dead { opacity: 0.5; text-decoration: line-through; }
+.role-card { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 20px 18px; border: 1px solid var(--fg); background: var(--surface); }
+.role-card.mafia { border-color: var(--red); background: var(--red-soft); }
+.role-card.mafia .sc-big { color: var(--red); }
+.role-card.dead { opacity: 0.75; border-style: dashed; }
+.rc-extra { margin: 0; font-size: 14px; color: var(--red); font-weight: 500; }
+.rc-checks { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.check-result { padding: 14px; border: 1px solid var(--fg); background: var(--bg); font-size: 16px; text-align: center; }
+.check-result.bad { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+.room.is-night .turn.night { border-color: var(--faint); background: linear-gradient(180deg, rgba(40, 44, 70, 0.35), var(--surface)); }
+.bubble.mafia { border-color: var(--red); background: var(--red-soft); }
+.bubble.mafia .b-tag { color: var(--red); }
+.bubble.dead { border-style: dashed; opacity: 0.8; }
+.bubble.dead .b-tag { color: var(--muted); }
+.bubble.defense { border-color: var(--fg); max-width: 100%; }
+.bubble.defense .b-tag { color: var(--fg); }
+.msg-sys.strong { color: var(--muted); font-size: 13px; text-align: center; }
+.role-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.role-list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); }
+.role-list li.dead span { color: var(--faint); }
+.op-row button[aria-pressed="true"] { border-color: var(--red); }
+.text-in:disabled { opacity: 0.6; }

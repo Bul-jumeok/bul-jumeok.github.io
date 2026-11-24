@@ -72,10 +72,13 @@ function h(tag, attrs) {
   for (let i = 2; i < arguments.length; i++) append(el, arguments[i]);
   return el;
 }
-function append(el, c) {
-  if (c == null || c === false) return;
-  if (Array.isArray(c)) { c.forEach(function (x) { append(el, x); }); return; }
-  el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+function append(el) {
+  for (let i = 1; i < arguments.length; i++) {
+    const c = arguments[i];
+    if (c == null || c === false) continue;
+    if (Array.isArray(c)) c.forEach(function (x) { append(el, x); });
+    else el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  }
 }
 function draft(tag, id, attrs) {
   const el = h(tag, Object.assign({ id: id }, attrs || {}));
@@ -452,7 +455,7 @@ function screenDetail(id) {
 /* ---------- screens: games ---------- */
 const GAMES = [
   { id: "assoc", code: "G-01", name: "연상퀴즈", desc: "단어 하나로 떠올리는 조직원들의 머릿속.", ready: false },
-  { id: "mafia", code: "G-02", name: "마피아", desc: "조직 안에 조직이 있다. 밤마다 한 명씩.", ready: false },
+  { id: "mafia", code: "G-02", name: "마피아", desc: "조직 안에 조직이 있다. 밤마다 한 명씩.", ready: true },
   { id: "yut", code: "G-03", name: "윷놀이", desc: "도·개·걸·윷·모로 가리는 본부 서열.", ready: false },
   { id: "liar", code: "G-04", name: "라이어", desc: "혼자만 제시어를 모르는 사람을 찾아라.", ready: true }
 ];
@@ -472,12 +475,12 @@ function screenGames() {
 /* ---------- Liar: lobby list ---------- */
 const STATUS_LABEL = { lobby: "대기 중", hint: "설명 중", discuss: "토론 중", vote: "투표 중", guess: "라이어 반격", result: "결과 발표" };
 /* Seconds per phase. ?emu&fast shortens them for local tests. */
-const FAST = EMU && new URLSearchParams(location.search).has("fast");
+const FAST = EMU && new URLSearchParams(location.search).has("fast") ? (parseFloat(new URLSearchParams(location.search).get("fast")) || 10) : 0;
 const DUR = { hint: 20, discuss: 120, vote: 20, guess: 20 };
-if (FAST) Object.keys(DUR).forEach(function (k) { DUR[k] = Math.max(2, Math.round(DUR[k] / 10)); });
+if (FAST) Object.keys(DUR).forEach(function (k) { DUR[k] = Math.max(2, Math.round(DUR[k] / FAST)); });
 function screenLiarLobby() {
   const me = meMember();
-  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed"; });
+  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type !== "mafia"; });
   const list = rooms.length
     ? h("ul", { class: "room-list" }, rooms.map(function (r) {
         const mine = me && (r.players || []).indexOf(me.id) >= 0;
@@ -495,7 +498,7 @@ function screenLiarLobby() {
     h("div", { class: "sec-head" },
       h("div", null, h("span", { class: "eyebrow", text: "G-04" }), h("h2", { text: "라이어" }),
         h("p", { text: "방을 만들거나 열린 방에 들어가세요. 설명과 투표는 모두 게임 안에서 해요." }))),
-    h("button", { type: "button", class: "save", disabled: !me || !S.user, onclick: createRoom },
+    h("button", { type: "button", class: "save", disabled: !me || !S.user, onclick: function () { createRoom("liar"); } },
       me ? "새 방 만들기" : "신원을 고른 조직원만 방을 만들 수 있어요"),
     h("div", { class: "field" }, h("div", { class: "field-label", text: "열린 방" }), list),
     liarRules(),
@@ -515,11 +518,12 @@ function liarRules() {
         h("li", { text: "라이어를 맞히면 라이어에게 20초의 마지막 기회가 있어요. 제시어를 맞히면 라이어 승리, 못 맞히면 조직원 승리. 동점이거나 엉뚱한 사람을 지목하면 라이어 승리예요." })),
       h("p", { class: "note", text: "바보 모드에서는 라이어도 같은 주제의 다른 단어를 받아서, 자기가 라이어인지 모른 채 설명해요." })));
 }
-async function createRoom() {
+async function createRoom(type) {
   const me = meMember();
   if (!me || !S.user) return;
   try {
     const ref = await addDoc(collection(db, "rooms"), {
+      type: type === "mafia" ? "mafia" : "liar",
       status: "lobby", createdAt: serverTimestamp(), createdBy: me.id, players: [me.id],
       mode: 0, topicChoice: -1, rounds: 1, game: 0, votes: {}, turn: 0
     });
@@ -657,13 +661,14 @@ async function submitGuess(text, timedOut, expectPhase) {
 /* ---------- Liar: phase timers ---------- */
 const GRACE_MS = 1500;
 let lastTimeoutKey = "";
+function durOf(r) { return (r && r.type === "mafia" ? MDUR : DUR)[r && r.status]; }
 function phaseEnd(r) {
-  if (!r || !DUR[r.status] || !r.phaseAt || !r.phaseAt.toMillis) return null;
-  return r.phaseAt.toMillis() + DUR[r.status] * 1000;
+  if (!r || !durOf(r) || !r.phaseAt || !r.phaseAt.toMillis) return null;
+  return r.phaseAt.toMillis() + durOf(r) * 1000;
 }
 function fmtSec(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 function timerEl(r, label) {
-  const end = phaseEnd(r), total = (DUR[r.status] || 1) * 1000;
+  const end = phaseEnd(r), total = (durOf(r) || 1) * 1000;
   const left = end == null ? total : end - Date.now();
   const sec = Math.max(0, Math.ceil(left / 1000));
   const bar = h("i"); bar.style.width = Math.max(0, Math.min(100, left / total * 100)) + "%";
@@ -671,6 +676,7 @@ function timerEl(r, label) {
     h("span", { class: "t-label", text: label }), h("b", { class: "t-num", text: fmtSec(sec) }), h("span", { class: "t-bar" }, bar));
 }
 async function onTimeout(r) {
+  if (r.type === "mafia") return mafiaTimeout(r);
   if (r.status === "hint") return advanceTurn("timeout", null, r.phase);
   if (r.status === "discuss") return toVote(r.phase);
   if (r.status === "vote") return finalizeVotes(true, r.phase);
@@ -681,7 +687,7 @@ setInterval(function () {
   if (!r || currentRoute().indexOf("room-") !== 0) return;
   const end = phaseEnd(r);
   if (end == null) return;
-  const left = end - Date.now(), total = DUR[r.status] * 1000;
+  const left = end - Date.now(), total = durOf(r) * 1000;
   const sec = Math.max(0, Math.ceil(left / 1000));
   document.querySelectorAll(".timer").forEach(function (el) {
     el.querySelector(".t-num").textContent = fmtSec(sec);
@@ -695,7 +701,7 @@ setInterval(function () {
   }
 }, 500);
 async function backToLobby() {
-  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null });
+  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0 });
 }
 
 function screenRoom(id) {
@@ -705,6 +711,7 @@ function screenRoom(id) {
   const r = S.room;
   if (!r) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "방에 들어가는 중…" }));
   if (r.status === "closed") return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "이 방은 닫혔어요. 새 방을 만들어 주세요." }));
+  if (r.type === "mafia") return screenMafiaRoom(r);
 
   const me = meMember();
   const players = r.players || [];
@@ -894,6 +901,445 @@ function chatBox(r, me) {
     try { await sendMsg("chat", t); S.drafts["chat-text"] = ""; render(); } catch (e) { toast(errText(e)); }
   });
   return h("div", { class: "field" }, h("div", { class: "field-label", text: "대화" }), log, f);
+}
+
+
+/* ---------- Mafia ---------- */
+const MDUR = { night: 30, day: 120, vote: 20, defense: 20, verdict: 15 };
+if (FAST) Object.keys(MDUR).forEach(function (k) { MDUR[k] = Math.max(2, Math.round(MDUR[k] / FAST)); });
+const M_STATUS = { lobby: "대기 중", night: "밤", day: "낮 토론", vote: "처형 투표", defense: "최후의 변론", verdict: "찬반 투표", result: "게임 끝" };
+const ROLE = {
+  mafia: { name: "마피아", desc: "밤마다 동료와 함께 한 명을 제거해요. 살아남은 시민 수만큼 남으면 승리예요." },
+  doctor: { name: "의사", desc: "밤마다 한 명을 골라 마피아의 공격에서 살려요. 자기 자신도 고를 수 있어요." },
+  police: { name: "경찰", desc: "밤마다 한 명을 조사해서 마피아인지 알아내요. 결과는 나만 봐요." },
+  citizen: { name: "시민", desc: "낮 토론과 투표로 마피아를 모두 찾아내면 승리예요." }
+};
+function mafiaCount(n) { return n >= 9 ? 3 : n >= 6 ? 2 : 1; }
+function dealRoles(lineup, seed) {
+  const rnd = mulberry32((seed ^ 0x5bd1e995) >>> 0);
+  const order = lineup.slice();
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
+  const m = mafiaCount(order.length), roles = {};
+  order.forEach(function (p, i) { roles[p] = i < m ? "mafia" : i === m ? "doctor" : i === m + 1 ? "police" : "citizen"; });
+  return roles;
+}
+function mafiaWinner(roles, alive) {
+  const mafia = alive.filter(function (p) { return roles[p] === "mafia"; }).length;
+  if (!mafia) return "citizen";
+  if (mafia >= alive.length - mafia) return "mafia";
+  return null;
+}
+function sysMsg(tx, r, text) {
+  tx.set(doc(collection(db, "rooms", S.roomId, "msgs")), {
+    uid: myUid(), memberId: null, nick: "본부", text: text, kind: "sys", game: r.game || 0, createdAt: serverTimestamp()
+  });
+}
+/* Check for a winner; otherwise continue with `cont` and announce `contMsg`. */
+function mafiaAdvance(tx, r, roles, alive, cont, contMsg) {
+  const w = mafiaWinner(roles, alive);
+  if (w) {
+    sysMsg(tx, r, w === "citizen" ? "🎉 마피아가 모두 잡혔어요. 시민 승리!" : "🩸 마피아가 시민 수만큼 남았어요. 마피아 승리!");
+    tx.update(roomRef(), nextPhase(r, { status: "result", alive: alive, winner: w }));
+  } else {
+    if (contMsg) sysMsg(tx, r, contMsg);
+    tx.update(roomRef(), nextPhase(r, Object.assign({ alive: alive }, cont)));
+  }
+}
+function toNight(r) {
+  return { status: "night", day: (r.day || 1) + 1, night: {}, votes: {}, verdict: {}, accused: null, readyVote: [] };
+}
+async function startMafia() {
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "lobby") throw { code: "phase" };
+      const lineup = (r.players || []).filter(function (p) { return !!findMember(p); }).slice().sort();
+      if (lineup.length < 4) throw { code: "few" };
+      const game = (r.game || 0) + 1;
+      sysMsg(tx, { game: game }, "🌙 첫 번째 밤이 되었어요. 마피아는 조용히 움직이세요.");
+      tx.update(roomRef(), nextPhase(r, {
+        status: "night", lineup: lineup, seed: Math.floor(Math.random() * 2147483647), alive: lineup, day: 1,
+        night: {}, checks: [], votes: {}, verdict: {}, accused: null, winner: null, readyVote: [],
+        game: game, startedAt: serverTimestamp()
+      }));
+    });
+  } catch (e) {
+    if (e && e.code === "few") toast("4명 이상 모여야 시작할 수 있어요.");
+    else if (e && e.code === "phase") toast("이미 게임이 시작됐어요.");
+    else toast(errText(e));
+  }
+}
+async function nightAct(role, target) {
+  const me = meMember(); if (!me) return;
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "night") throw { code: "phase" };
+      const roles = dealRoles(r.lineup, r.seed), alive = r.alive || [];
+      if (roles[me.id] !== role || alive.indexOf(me.id) < 0 || alive.indexOf(target) < 0) throw { code: "role" };
+      const night = Object.assign({}, r.night || {}), patch = {};
+      if (role === "police") {
+        if (night.police) throw { code: "done" };
+        patch.checks = (r.checks || []).concat([{ day: r.day || 1, target: target }]);
+      }
+      night[role] = target; patch.night = night;
+      tx.update(roomRef(), patch);
+    });
+    await resolveNight(false);
+  } catch (e) {
+    toast(e && e.code === "done" ? "오늘 밤 조사는 이미 했어요." : e && e.code === "phase" ? "밤이 끝났어요." : errText(e));
+  }
+}
+async function resolveNight(force, expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "night") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    const roles = dealRoles(r.lineup, r.seed), alive = r.alive || [], night = r.night || {};
+    const has = function (role) { return alive.some(function (p) { return roles[p] === role; }); };
+    if (!force && ((has("mafia") && !night.mafia) || (has("doctor") && !night.doctor) || (has("police") && !night.police))) return;
+    let left = alive.slice(), text;
+    if (night.mafia && night.mafia !== night.doctor) {
+      left = left.filter(function (p) { return p !== night.mafia; });
+      text = "☀️ " + (r.day || 1) + "일차 아침. 지난 밤 " + nickOf(night.mafia) + "님이 마피아에게 당했어요.";
+    } else if (night.mafia) text = "☀️ " + (r.day || 1) + "일차 아침. 마피아가 누군가를 노렸지만 의사가 살려냈어요!";
+    else text = "☀️ " + (r.day || 1) + "일차 아침. 조용한 밤이었어요.";
+    sysMsg(tx, r, text);
+    mafiaAdvance(tx, r, roles, left, { status: "day", readyVote: [] });
+  });
+}
+async function mafiaToVote(expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "day") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    tx.update(roomRef(), nextPhase(r, { status: "vote", votes: {} }));
+  });
+}
+async function mafiaReady() {
+  const me = meMember(); if (!me) return;
+  try {
+    await updateDoc(roomRef(), { readyVote: arrayUnion(me.id) });
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "day") return;
+      const alive = r.alive || [];
+      const ready = (r.readyVote || []).filter(function (p) { return alive.indexOf(p) >= 0; });
+      if (ready.length >= Math.ceil(alive.length / 2)) tx.update(roomRef(), nextPhase(r, { status: "vote", votes: {} }));
+    });
+  } catch (e) { toast(errText(e)); }
+}
+async function mafiaVote(target) {
+  const me = meMember(); if (!me) return;
+  try { await updateDoc(roomRef(), { ["votes." + me.id]: target }); await finalizeMafiaVote(false); }
+  catch (e) { toast(errText(e)); }
+}
+async function finalizeMafiaVote(force, expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "vote") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    const alive = r.alive || [], votes = r.votes || {};
+    const voted = alive.filter(function (p) { return votes[p]; });
+    if (!force && voted.length < alive.length) return;
+    const tally = {};
+    voted.forEach(function (p) { const t = votes[p]; if (t !== "skip" && alive.indexOf(t) >= 0) tally[t] = (tally[t] || 0) + 1; });
+    let max = 0; Object.keys(tally).forEach(function (k) { if (tally[k] > max) max = tally[k]; });
+    const top = Object.keys(tally).filter(function (k) { return tally[k] === max; });
+    const roles = dealRoles(r.lineup, r.seed);
+    if (top.length !== 1) {
+      sysMsg(tx, r, top.length ? "표가 똑같이 갈려서 아무도 처형되지 않았어요." : "아무도 지목되지 않았어요.");
+      mafiaAdvance(tx, r, roles, alive, toNight(r), "🌙 " + ((r.day || 1) + 1) + "번째 밤이 되었어요.");
+    } else {
+      sysMsg(tx, r, nickOf(top[0]) + "님이 " + max + "표로 최다 득표! 최후의 변론을 들어보세요.");
+      tx.update(roomRef(), nextPhase(r, { status: "defense", accused: top[0] }));
+    }
+  });
+}
+async function toVerdict(expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "defense") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    tx.update(roomRef(), nextPhase(r, { status: "verdict", verdict: {} }));
+  });
+}
+async function verdictVote(yes) {
+  const me = meMember(); if (!me) return;
+  try { await updateDoc(roomRef(), { ["verdict." + me.id]: yes ? "yes" : "no" }); await finalizeVerdict(false); }
+  catch (e) { toast(errText(e)); }
+}
+async function finalizeVerdict(force, expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "verdict") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    const alive = r.alive || [], v = r.verdict || {};
+    const voters = alive.filter(function (p) { return p !== r.accused; });
+    const done = voters.filter(function (p) { return v[p]; });
+    if (!force && done.length < voters.length) return;
+    const yes = done.filter(function (p) { return v[p] === "yes"; }).length, no = done.length - yes;
+    const roles = dealRoles(r.lineup, r.seed), nextNight = "🌙 " + ((r.day || 1) + 1) + "번째 밤이 되었어요.";
+    if (yes > no) {
+      sysMsg(tx, r, "⚖️ " + nickOf(r.accused) + "님이 처형됐어요. (찬성 " + yes + " · 반대 " + no + ")");
+      mafiaAdvance(tx, r, roles, alive.filter(function (p) { return p !== r.accused; }), toNight(r), nextNight);
+    } else {
+      sysMsg(tx, r, "⚖️ " + nickOf(r.accused) + "님이 살아남았어요. (찬성 " + yes + " · 반대 " + no + ")");
+      mafiaAdvance(tx, r, roles, alive, toNight(r), nextNight);
+    }
+  });
+}
+function mafiaTimeout(r) {
+  if (r.status === "night") return resolveNight(true, r.phase);
+  if (r.status === "day") return mafiaToVote(r.phase);
+  if (r.status === "vote") return finalizeMafiaVote(true, r.phase);
+  if (r.status === "defense") return toVerdict(r.phase);
+  if (r.status === "verdict") return finalizeVerdict(true, r.phase);
+}
+
+function screenMafiaLobby() {
+  const me = meMember();
+  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type === "mafia"; });
+  const list = rooms.length
+    ? h("ul", { class: "room-list" }, rooms.map(function (r) {
+        const mine = me && (r.players || []).indexOf(me.id) >= 0;
+        const label = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : "게임 중";
+        return h("li", null, h("button", { type: "button", class: "room-item", onclick: function () { go("room-" + r.id); } },
+          h("span", { class: "ri-main" },
+            h("b", { text: nickOf(r.createdBy) + "의 방" }),
+            h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
+          h("span", { class: "ri-side" },
+            h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
+            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+      }))
+    : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
+  return h("section", { class: "screen" },
+    h("button", { class: "back", type: "button", onclick: function () { go("games"); }, text: "게임방으로" }),
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: "G-02" }), h("h2", { text: "마피아" }),
+        h("p", { text: "조직 안에 숨은 마피아를 찾아라. 4명부터 할 수 있어요." }))),
+    h("button", { type: "button", class: "save", disabled: !me || !S.user, onclick: function () { createRoom("mafia"); } },
+      me ? "새 방 만들기" : "신원을 고른 조직원만 방을 만들 수 있어요"),
+    h("div", { class: "field" }, h("div", { class: "field-label", text: "열린 방" }), list),
+    mafiaRules());
+}
+function mafiaRules() {
+  return h("details", { class: "guide" },
+    h("summary", { text: "마피아 게임 규칙" }),
+    h("div", { class: "guide-body" },
+      h("p", { class: "note", text: "직업: 마피아, 의사, 경찰, 시민. 마피아는 4~5명이면 1명, 6~8명이면 2명, 9명 이상이면 3명이에요." }),
+      h("ol", null,
+        h("li", { text: "밤 (30초): 마피아는 제거할 사람을, 의사는 살릴 사람을, 경찰은 조사할 사람을 골라요. 밤에는 마피아끼리만 대화할 수 있어요." }),
+        h("li", { text: "아침: 지난 밤 결과가 발표돼요. 의사가 마피아가 노린 사람을 고르면 살아나요." }),
+        h("li", { text: "낮 토론 (2분): 살아 있는 사람 모두 대화해요. 절반 이상이 ‘바로 투표하기’를 누르면 일찍 끝나요." }),
+        h("li", { text: "처형 투표 (20초): 마피아로 의심되는 사람에게 투표해요. 기권도 할 수 있어요." }),
+        h("li", { text: "최후의 변론 (20초): 최다 득표자가 변론해요. 동점이면 아무도 처형되지 않고 밤이 돼요." }),
+        h("li", { text: "찬반 투표 (15초): 찬성이 더 많으면 처형돼요. 처형된 사람의 직업은 게임이 끝날 때 공개돼요." })),
+      h("p", { class: "note", text: "마피아를 모두 잡으면 시민 승리, 마피아가 나머지 사람 수만큼 남으면 마피아 승리예요. 죽은 사람은 관전하면서 죽은 사람끼리만 보이는 저승 채팅을 할 수 있어요." })));
+}
+function screenMafiaRoom(r) {
+  const back = h("button", { class: "back", type: "button", onclick: function () { go("game-mafia"); }, text: "마피아 방 목록" });
+  const me = meMember();
+  const players = r.players || [];
+  const inRoom = me && players.indexOf(me.id) >= 0;
+  const playing = r.status !== "lobby";
+  const lineup = playing ? (r.lineup || []) : players;
+  const roles = playing && r.lineup && r.lineup.length ? dealRoles(r.lineup, r.seed) : null;
+  if (playing && !roles) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "게임 정보를 읽지 못했어요." }),
+    h("button", { type: "button", class: "ghost wide", onclick: backToLobby, text: "대기실로 돌리기" }));
+  const alive = r.alive || [];
+  const isPlayer = !!(me && lineup.indexOf(me.id) >= 0);
+  const myRole = isPlayer && roles ? roles[me.id] : null;
+  const iAlive = isPlayer && alive.indexOf(me.id) >= 0;
+  const over = r.status === "result";
+  const seeAll = over || (isPlayer && playing && !iAlive);
+  const ctx = { me: me, roles: roles, isPlayer: isPlayer, iAlive: iAlive, myRole: myRole, over: over, seeAll: seeAll };
+
+  const title = r.status === "night" ? (r.day || 1) + "번째 밤" : r.status === "day" ? (r.day || 1) + "일차 낮" : (M_STATUS[r.status] || "");
+  const head = h("div", { class: "room-head" },
+    h("div", null, h("span", { class: "eyebrow", text: "마피아 · " + nickOf(r.createdBy) + "의 방" }), h("h2", { text: title })),
+    h("span", { class: "mode-chip", text: "마피아 " + mafiaCount(lineup.length || 4) + "명" }));
+
+  const chips = h("div", { class: "chips" }, lineup.map(function (p) {
+    const dead = playing && alive.indexOf(p) < 0;
+    let tag = "";
+    if (roles && (seeAll || (myRole === "mafia" && roles[p] === "mafia"))) tag = " · " + ROLE[roles[p]].name;
+    let mark = "";
+    if (r.status === "vote" && r.votes && r.votes[p]) mark = " ✓";
+    if (r.status === "verdict" && r.verdict && r.verdict[p]) mark = " ✓";
+    return h("span", { class: "chip static" + (me && p === me.id ? " me" : "") + (dead ? " dead" : "") + (mark ? " done" : "") },
+      (dead ? "☠ " : "") + nickOf(p) + tag + mark);
+  }));
+
+  let phase;
+  if (r.status === "lobby") phase = mLobbyPanel(r, me, inRoom, players);
+  else if (r.status === "night") phase = mNightPanel(r, ctx);
+  else if (r.status === "day") phase = mDayPanel(r, ctx);
+  else if (r.status === "vote") phase = mVotePanel(r, ctx);
+  else if (r.status === "defense") phase = mDefensePanel(r, ctx);
+  else if (r.status === "verdict") phase = mVerdictPanel(r, ctx);
+  else phase = mResultPanel(r, ctx);
+
+  return h("section", { class: "screen room" + (r.status === "night" ? " is-night" : "") }, back, head,
+    h("div", { class: "field" }, h("div", { class: "field-label", text: (playing ? "참가자 " + alive.length + "/" + lineup.length + "명 생존" : "모인 사람 " + lineup.length + "명") }), chips),
+    playing && isPlayer && !over ? roleCard(r, ctx) : null,
+    phase,
+    mChat(r, ctx));
+}
+function roleCard(r, ctx) {
+  const role = ctx.myRole, R = ROLE[role];
+  const mates = role === "mafia" ? r.lineup.filter(function (p) { return p !== ctx.me.id && ctx.roles[p] === "mafia"; }).map(nickOf) : [];
+  const checks = role === "police" ? (r.checks || []).map(function (c) {
+    return c.day + "일차 밤 · " + nickOf(c.target) + (ctx.roles[c.target] === "mafia" ? " → 마피아!" : " → 마피아 아님");
+  }) : [];
+  return h("div", { class: "role-card " + role + (ctx.iAlive ? "" : " dead") },
+    h("span", { class: "sc-eyebrow", text: ctx.iAlive ? "내 직업 · 나만 보여요" : "☠ 사망 · 관전 중" }),
+    h("span", { class: "sc-big", text: R.name }),
+    h("span", { class: "sc-hint", text: R.desc }),
+    mates.length ? h("p", { class: "rc-extra", text: "동료 마피아: " + mates.join(", ") }) : null,
+    checks.length ? h("ul", { class: "rc-checks" }, checks.map(function (t) { return h("li", { text: t }); })) : null);
+}
+function targetGrid(list, chosen, onPick) {
+  return h("div", { class: "vote-grid" }, list.map(function (p) {
+    return h("button", { type: "button", class: "vote-btn", "aria-pressed": chosen === p ? "true" : "false", onclick: function () { onPick(p); } },
+      h("div", { class: "vp" }, photoBox(findMember(p) || {})), h("span", { text: nickOf(p) }));
+  }));
+}
+function mLobbyPanel(r, me, inRoom, players) {
+  const n = players.length, enough = n >= 4, m = mafiaCount(Math.max(n, 4));
+  return h("div", { class: "panel" },
+    h("div", { class: "field-label", text: "직업 구성" }),
+    h("p", { text: enough ? "마피아 " + m + " · 의사 1 · 경찰 1 · 시민 " + (n - m - 2) : "4명부터 시작할 수 있어요. 지금 " + n + "명이에요." }),
+    !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
+      : inRoom
+        ? h("div", { class: "op-row" },
+            h("button", { type: "button", onclick: leaveRoom, text: "방 나가기" }),
+            h("button", { type: "button", class: "go", disabled: !enough, onclick: startMafia, text: enough ? "게임 시작" : "4명부터 시작" }))
+        : h("button", { type: "button", class: "save", onclick: joinRoom, text: "이 방에 참가하기" }),
+    h("p", { class: "hint", text: "단톡방에 ‘게임방 → 마피아에 방 열었어’라고 알려주세요." }));
+}
+function mNightPanel(r, ctx) {
+  const night = r.night || {}, alive = r.alive || [], role = ctx.myRole;
+  const box = h("div", { class: "panel turn night" }, h("div", { class: "field-label", text: (r.day || 1) + "번째 밤" }), timerEl(r, "밤 남은 시간"));
+  if (!ctx.isPlayer) { append(box, h("p", { text: "밤이에요. 구경하며 아침을 기다려 주세요." })); return box; }
+  if (!ctx.iAlive) { append(box, h("p", { text: "관전 중이에요. 아래 저승 채팅으로 죽은 사람끼리 이야기할 수 있어요." })); return box; }
+  if (role === "citizen") { append(box, h("p", { text: "밤이에요. 시민은 아침이 올 때까지 조용히 기다려요." })); return box; }
+  if (role === "mafia") {
+    append(box, h("p", { text: "제거할 사람을 고르세요. 동료 마피아와 대화창에서 의논해요." }),
+      targetGrid(alive.filter(function (p) { return ctx.roles[p] !== "mafia"; }), night.mafia, function (p) { nightAct("mafia", p); }),
+      night.mafia ? h("p", { class: "hint", text: "지금 지목: " + nickOf(night.mafia) + " · 동료가 다른 사람을 누르면 바뀌어요." }) : null);
+  } else if (role === "doctor") {
+    append(box, h("p", { text: "오늘 밤 살릴 사람을 고르세요." }),
+      targetGrid(alive, night.doctor, function (p) { nightAct("doctor", p); }),
+      night.doctor ? h("p", { class: "hint", text: nickOf(night.doctor) + "님을 지키기로 했어요. 다른 사람을 누르면 바뀌어요." }) : null);
+  } else if (role === "police") {
+    if (night.police) {
+      const bad = ctx.roles[night.police] === "mafia";
+      append(box, h("div", { class: "check-result" + (bad ? " bad" : "") }, nickOf(night.police) + "님은 ", h("b", { text: bad ? "마피아예요!" : "마피아가 아니에요." })));
+    } else {
+      append(box, h("p", { text: "조사할 사람을 고르세요. 한 번 고르면 바꿀 수 없어요." }),
+        targetGrid(alive.filter(function (p) { return p !== ctx.me.id; }), null, function (p) { nightAct("police", p); }));
+    }
+  }
+  return box;
+}
+function mDayPanel(r, ctx) {
+  const alive = r.alive || [], need = Math.ceil(alive.length / 2);
+  const ready = (r.readyVote || []).filter(function (p) { return alive.indexOf(p) >= 0; });
+  const mine = ctx.me && ready.indexOf(ctx.me.id) >= 0;
+  return h("div", { class: "panel turn" },
+    h("div", { class: "field-label", text: (r.day || 1) + "일차 낮 토론" }),
+    timerEl(r, "토론 남은 시간"),
+    h("p", { text: "누가 마피아인지 대화창에서 이야기해요." }),
+    ctx.iAlive ? h("button", { type: "button", class: mine ? "ghost wide" : "save", disabled: mine, onclick: mafiaReady },
+      (mine ? "바로 투표에 찬성했어요 " : "바로 투표하기 ") + "(" + ready.length + "/" + need + ")") : null,
+    h("p", { class: "hint", text: "살아 있는 사람 절반 이상이 ‘바로 투표하기’를 누르면 토론이 일찍 끝나요." }));
+}
+function mVotePanel(r, ctx) {
+  const alive = r.alive || [], votes = r.votes || {};
+  const done = alive.filter(function (p) { return votes[p]; }).length;
+  const mine = ctx.me ? votes[ctx.me.id] : null;
+  const box = h("div", { class: "panel" },
+    h("div", { class: "field-label", text: "처형 투표 · " + done + " / " + alive.length + "명 완료" }),
+    timerEl(r, "투표 남은 시간"));
+  if (ctx.iAlive) {
+    append(box, targetGrid(alive.filter(function (p) { return p !== ctx.me.id; }), mine, mafiaVote),
+      h("button", { type: "button", class: "ghost wide", "aria-pressed": mine === "skip" ? "true" : "false", onclick: function () { mafiaVote("skip"); } }, mine === "skip" ? "기권했어요" : "기권하기"),
+      h("p", { class: "hint", text: mine ? (mine === "skip" ? "기권했어요." : "‘" + nickOf(mine) + "’에게 투표했어요.") + " 다른 걸 누르면 바뀌어요." : "마피아로 의심되는 사람을 누르세요." }));
+  } else append(box, h("p", { class: "note", text: "살아 있는 사람들이 투표하고 있어요." }));
+  return box;
+}
+function mDefensePanel(r, ctx) {
+  const mine = ctx.me && ctx.me.id === r.accused;
+  return h("div", { class: "panel turn" + (mine ? " mine" : "") },
+    h("div", { class: "field-label", text: "최후의 변론" }),
+    timerEl(r, nickOf(r.accused) + " 변론 남은 시간"),
+    h("p", { text: mine ? "당신이 최다 득표자예요! 아래 대화창에 변론을 남기세요." : nickOf(r.accused) + "님의 최후의 변론을 들어보세요." }),
+    mine ? h("button", { type: "button", class: "ghost wide", onclick: function () { toVerdict(null); }, text: "변론 마치기" }) : null);
+}
+function mVerdictPanel(r, ctx) {
+  const alive = r.alive || [], v = r.verdict || {};
+  const voters = alive.filter(function (p) { return p !== r.accused; });
+  const done = voters.filter(function (p) { return v[p]; }).length;
+  const can = ctx.iAlive && ctx.me.id !== r.accused;
+  const mine = ctx.me ? v[ctx.me.id] : null;
+  return h("div", { class: "panel" },
+    h("div", { class: "field-label", text: "찬반 투표 · " + done + " / " + voters.length + "명 완료" }),
+    timerEl(r, "찬반 남은 시간"),
+    h("p", null, h("b", { text: nickOf(r.accused) }), "님을 처형할까요?"),
+    can ? h("div", { class: "op-row" },
+      h("button", { type: "button", class: mine === "yes" ? "go" : "", "aria-pressed": mine === "yes" ? "true" : "false", onclick: function () { verdictVote(true); }, text: "찬성 (처형)" }),
+      h("button", { type: "button", class: mine === "no" ? "go" : "", "aria-pressed": mine === "no" ? "true" : "false", onclick: function () { verdictVote(false); }, text: "반대 (살리기)" }))
+      : h("p", { class: "note", text: ctx.me && ctx.me.id === r.accused ? "다른 사람들이 찬반 투표를 하고 있어요." : "살아 있는 사람들이 찬반 투표를 하고 있어요." }),
+    can ? h("p", { class: "hint", text: "찬성이 반대보다 많으면 처형돼요. 시간이 끝나면 그때까지의 표로 정해요." }) : null);
+}
+function mResultPanel(r, ctx) {
+  const win = r.winner === "citizen";
+  const alive = r.alive || [];
+  return h("div", { class: "answer" + (win ? " team" : "") },
+    h("div", { class: "result-title", text: win ? "시민 승리" : "마피아 승리" }),
+    h("ul", { class: "role-list" }, (r.lineup || []).map(function (p) {
+      return h("li", { class: alive.indexOf(p) < 0 ? "dead" : "" },
+        h("span", { text: (alive.indexOf(p) < 0 ? "☠ " : "") + nickOf(p) }), h("b", { text: ROLE[ctx.roles[p]].name }));
+    })),
+    h("div", { class: "op-row" },
+      h("button", { type: "button", onclick: function () { go("game-mafia"); }, text: "방 목록" }),
+      h("button", { type: "button", class: "go", onclick: backToLobby, text: "같은 방에서 한 판 더" })));
+}
+function mChat(r, ctx) {
+  const game = r.game || 0;
+  const showMafia = ctx.over || ctx.myRole === "mafia" || (ctx.isPlayer && !ctx.iAlive);
+  const showDead = ctx.over || (ctx.isPlayer && !ctx.iAlive && r.status !== "lobby");
+  const msgs = S.msgs.filter(function (m) {
+    if ((m.game || 0) !== game) return false;
+    if (m.kind === "mafia") return showMafia;
+    if (m.kind === "dead") return showDead;
+    return true;
+  });
+  let kind = null, ph;
+  if (r.status === "lobby" || ctx.over) { kind = "chat"; ph = "대화 보내기"; }
+  else if (!ctx.isPlayer) ph = "게임 중에는 참가자만 대화할 수 있어요";
+  else if (!ctx.iAlive) { kind = "dead"; ph = "저승 채팅 (죽은 사람끼리만 보여요)"; }
+  else if (r.status === "night") { if (ctx.myRole === "mafia") { kind = "mafia"; ph = "마피아끼리 대화"; } else ph = "밤에는 마피아만 대화할 수 있어요"; }
+  else if (r.status === "defense") { if (ctx.me.id === r.accused) { kind = "defense"; ph = "최후의 변론 쓰기"; } else ph = "최후의 변론을 듣는 중이에요"; }
+  else { kind = "chat"; ph = "대화 보내기"; }
+  const label = { mafia: "마피아 대화", dead: "저승", defense: "최후의 변론" };
+  const log = h("div", { class: "log", role: "log", "aria-live": "polite" },
+    msgs.length ? msgs.map(function (m) {
+      if (m.kind === "sys" || m.kind === "skip") return h("div", { class: "msg-sys strong", text: m.text });
+      const mine = ctx.me && m.memberId === ctx.me.id;
+      return h("div", { class: "bubble " + (m.kind || "chat") + (mine ? " mine" : "") },
+        h("div", { class: "b-meta" }, h("b", { text: m.nick || "손님" }), label[m.kind] ? h("span", { class: "b-tag", text: label[m.kind] }) : null),
+        h("div", { class: "b-text", text: m.text }));
+    }) : h("div", { class: "msg-sys", text: "아직 대화가 없어요." }));
+  const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "120", placeholder: ph, autocomplete: "off", disabled: !kind });
+  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm", disabled: !kind, text: "보내기" }));
+  f.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = inp.value.trim(); if (!t || !S.user || !kind) return;
+    try { await sendMsg(kind, t); S.drafts["chat-text"] = ""; render(); } catch (e) { toast(errText(e)); }
+  });
+  return h("div", { class: "field" }, h("div", { class: "field-label", text: ctx.myRole === "mafia" && r.status === "night" && ctx.iAlive ? "대화 · 지금은 마피아끼리만 보여요" : "대화" }), log, f);
 }
 
 /* ---------- Liar: custom topics (boss) ---------- */
@@ -1127,6 +1573,7 @@ function draw() {
   else if (r.indexOf("m-") === 0) { tab = "members"; view = screenDetail(r.slice(2)); }
   else if (r === "games") { tab = "games"; view = screenGames(); }
   else if (r === "game-liar") { tab = "games"; view = screenLiarLobby(); }
+  else if (r === "game-mafia") { tab = "games"; view = screenMafiaLobby(); }
   else if (r.indexOf("room-") === 0) { tab = "games"; view = screenRoom(r.slice(5)); }
   else if (r === "guestbook") { tab = "guestbook"; view = screenGuestbook(); }
   else view = screenHQ();
