@@ -116,6 +116,153 @@ function timeAgo(ts) {
 function go(name) { if (location.hash.slice(1) === name) render(); else location.hash = name; }
 function currentRoute() { return location.hash.slice(1) || "hq"; }
 
+
+/* ---------- sound effects: generated with Web Audio, no audio files ---------- */
+const SND = { ctx: null, on: true, buf: null, breath: null, lastSec: null, lastKey: "", lastPop: 0 };
+try { SND.on = localStorage.getItem("bf-sound") !== "off"; } catch (e) {}
+function ac() {
+  if (!SND.on) return null;
+  if (!SND.ctx) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    try { SND.ctx = new C(); } catch (e) { return null; }
+  }
+  if (SND.ctx.state === "suspended") SND.ctx.resume().catch(function () {});
+  return SND.ctx;
+}
+/* phones only allow sound after the viewer touches the page */
+["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
+  document.addEventListener(ev, function () { if (SND.on) ac(); }, { passive: true });
+});
+function noiseBuf(c) {
+  if (!SND.buf) {
+    const b = c.createBuffer(1, Math.floor(c.sampleRate * 1.5), c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    SND.buf = b;
+  }
+  return SND.buf;
+}
+function tone(f, dur, o) {
+  o = o || {};
+  const c = ac(); if (!c) return;
+  const t = c.currentTime + (o.at || 0), os = c.createOscillator(), g = c.createGain();
+  os.type = o.type || "sine";
+  os.frequency.setValueAtTime(f, t);
+  if (o.to) os.frequency.exponentialRampToValueAtTime(o.to, t + dur);
+  const v = o.gain == null ? 0.15 : o.gain;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  os.connect(g); g.connect(c.destination);
+  os.start(t); os.stop(t + dur + 0.05);
+}
+function hiss(dur, o) {
+  o = o || {};
+  const c = ac(); if (!c) return null;
+  const t = c.currentTime + (o.at || 0), src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = noiseBuf(c); src.loop = true;
+  f.type = o.filter || "bandpass";
+  f.frequency.setValueAtTime(o.f || 1000, t);
+  if (o.fTo) f.frequency.linearRampToValueAtTime(o.fTo, t + dur);
+  f.Q.value = o.q || 0.8;
+  const v = o.gain == null ? 0.2 : o.gain;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(v, t + (o.attack || 0.01));
+  if (!o.hold) g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f); f.connect(g); g.connect(c.destination);
+  src.start(t);
+  if (!o.hold) src.stop(t + dur + 0.05);
+  return { src: src, g: g, c: c };
+}
+const SFX = {
+  tick: function () { tone(1500, 0.04, { type: "square", gain: 0.04 }); },
+  beep: function () { tone(660, 0.14, { type: "square", gain: 0.07 }); },
+  go: function () { tone(990, 0.35, { type: "square", gain: 0.08 }); },
+  ding: function () { tone(988, 0.25, { gain: 0.12 }); tone(1480, 0.35, { gain: 0.08, at: 0.08 }); },
+  correct: function () { tone(1047, 0.18, { type: "triangle", gain: 0.14 }); tone(784, 0.35, { type: "triangle", gain: 0.14, at: 0.16 }); },
+  timeup: function () { tone(440, 0.45, { type: "square", gain: 0.06 }); },
+  pop: function () { tone(620, 0.06, { gain: 0.05, to: 900 }); },
+  bang: function () {
+    hiss(0.35, { filter: "highpass", f: 900, gain: 0.5, q: 0.5 });
+    tone(110, 0.4, { gain: 0.4, to: 40 });
+    hiss(0.9, { filter: "lowpass", f: 600, gain: 0.12, at: 0.05 });
+  },
+  cough: function () {
+    [0, 0.22].forEach(function (a) {
+      hiss(0.16, { filter: "bandpass", f: 700, q: 1.2, gain: 0.35, at: a });
+      tone(160, 0.12, { type: "sawtooth", gain: 0.06, to: 90, at: a });
+    });
+  },
+  exhale: function () { hiss(0.8, { filter: "bandpass", f: 900, fTo: 400, q: 0.7, gain: 0.12, attack: 0.05 }); },
+  night: function () { tone(392, 0.5, { type: "triangle", gain: 0.1 }); tone(311, 0.6, { type: "triangle", gain: 0.1, at: 0.35 }); tone(233, 0.9, { type: "triangle", gain: 0.1, at: 0.7 }); },
+  morning: function () { [523, 659, 784, 1047].forEach(function (f, i) { tone(f, 0.3, { type: "triangle", gain: 0.1, at: i * 0.11 }); }); },
+  fanfare: function () { [523, 659, 784, 1047, 784, 1047].forEach(function (f, i) { tone(f, i === 5 ? 0.7 : 0.18, { type: "square", gain: 0.07, at: i * 0.15 }); }); }
+};
+function sfx(name) {
+  if (EMU) (window.__sfxLog = window.__sfxLog || []).push(name);
+  if (!SND.on) return;
+  try { SFX[name](); } catch (e) {}
+}
+function breathStart() {
+  if (!SND.on) return;
+  breathStop();
+  try { SND.breath = hiss(4, { filter: "bandpass", f: 500, fTo: 1400, q: 0.6, gain: 0.1, attack: 0.25, hold: true }); } catch (e) {}
+}
+function breathStop() {
+  const b = SND.breath; if (!b) return;
+  SND.breath = null;
+  try {
+    const t = b.c.currentTime;
+    b.g.gain.cancelScheduledValues(t);
+    b.g.gain.setValueAtTime(Math.max(0.0001, b.g.gain.value), t);
+    b.g.gain.linearRampToValueAtTime(0.0001, t + 0.08);
+    b.src.stop(t + 0.1);
+  } catch (e) {}
+}
+/* sounds for what changed in a game room */
+function sfxRoom(a, b) {
+  if (!a || !b || a.id !== b.id) return;
+  const me = meMember(), my = me && me.id, st = a.status !== b.status;
+  const fewer = (b.alive || []).length < (a.alive || []).length;
+  if (st && b.status === "result") { if (b.type === "smoke") { sfx("bang"); setTimeout(function () { sfx("fanfare"); }, 700); } else sfx("fanfare"); return; }
+  if (b.type === "mafia") {
+    if (st && a.status === "verdict" && fewer) sfx("bang");
+    if (st && b.status === "night") setTimeout(function () { sfx("night"); }, fewer ? 600 : 0);
+    else if (st && b.status === "day") sfx(fewer ? "bang" : "morning");
+    else if (st && (b.status === "vote" || b.status === "defense" || b.status === "verdict")) sfx("ding");
+  } else if (b.type === "sketch") {
+    if ((b.guessed || []).length > (a.guessed || []).length) sfx("correct");
+    else if (st && b.status === "reveal") sfx("timeup");
+    if (b.status === "draw" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) setTimeout(function () { sfx("ding"); }, 300);
+  } else if (b.type === "smoke") {
+    if (st && b.status === "play") sfx("go");
+    else if (st && b.status === "shot") sfx("bang");
+  } else {
+    if (b.status === "hint" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) sfx("ding");
+    else if (st && (b.status === "discuss" || b.status === "vote")) sfx("ding");
+    else if (st && b.status === "guess") sfx("correct");
+  }
+}
+function sfxMsgs(snap) {
+  const me = meMember(), my = me && me.id;
+  const fresh = snap.docChanges().some(function (ch) {
+    if (ch.type !== "added" || ch.doc.metadata.hasPendingWrites) return false;
+    const m = ch.doc.data();
+    return m.kind !== "sys" && m.kind !== "skip" && m.memberId !== my;
+  });
+  if (fresh && Date.now() - SND.lastPop > 300) { SND.lastPop = Date.now(); sfx("pop"); }
+}
+/* countdown ticks in the last seconds of a timed phase */
+const TICK_PHASES = { hint: 1, discuss: 1, vote: 1, guess: 1, night: 1, day: 1, defense: 1, verdict: 1, draw: 1, play: 1 };
+function sfxTimer(r, sec) {
+  const key = r.id + ":" + r.phase;
+  if (SND.lastKey !== key) { SND.lastKey = key; SND.lastSec = null; }
+  if (sec === SND.lastSec) return;
+  SND.lastSec = sec;
+  if (r.type === "smoke" && r.status === "ready") { if (sec >= 1 && sec <= 3) sfx("beep"); return; }
+  if (TICK_PHASES[r.status] && sec >= 1 && sec <= 5) sfx("tick");
+}
+
 /* Photos: one fixed zoom, bottom edge anchored, so faces come out the same size. */
 const PHOTO_ZOOM = 1.1;
 function fitPhoto(img) {
@@ -250,11 +397,16 @@ function watchRoom(id) {
   roomUnsubs.forEach(function (u) { u(); }); roomUnsubs = [];
   S.roomId = id; S.room = null; S.roomMissing = false; S.msgs = [];
   if (!id) return;
+  let msgsLoaded = false;
   roomUnsubs.push(onSnapshot(doc(db, "rooms", id), function (snap) {
-    S.room = snap.exists() ? Object.assign({ id: snap.id }, snap.data()) : null;
+    const prev = S.room;
+    S.room = snap.exists() ? Object.assign({ id: snap.id }, snap.data({ serverTimestamps: "estimate" })) : null;
+    sfxRoom(prev, S.room);
     S.roomMissing = !snap.exists(); render();
   }));
   roomUnsubs.push(onSnapshot(query(collection(db, "rooms", id, "msgs"), orderBy("createdAt"), limitToLast(400)), function (snap) {
+    if (msgsLoaded) sfxMsgs(snap);
+    msgsLoaded = true;
     S.msgs = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })); });
     render();
   }));
@@ -697,6 +849,7 @@ setInterval(function () {
   if (end == null) return;
   const left = end - Date.now(), total = durOf(r) * 1000;
   const sec = Math.max(0, Math.ceil(left / 1000));
+  sfxTimer(r, sec);
   document.querySelectorAll(".timer").forEach(function (el) {
     el.querySelector(".t-num").textContent = fmtSec(sec);
     el.querySelector(".t-bar i").style.width = Math.max(0, Math.min(100, left / total * 100)) + "%";
@@ -1903,6 +2056,7 @@ function smSend(force) {
 function smCough(why) {
   SMK.coughUntil = Date.now() + SM.coughMs; SMK.coughWhy = why; SMK.L = 0; SMK.holding = false;
   SMK.prog = Math.max(0, SMK.prog - SM.coughLoss);
+  breathStop(); sfx("cough");
   try { if (navigator.vibrate) navigator.vibrate(180); } catch (e) {}
   smSend(true);
   if (SK.pendingRender) { SK.pendingRender = false; render(); }
@@ -1922,6 +2076,7 @@ function smTick(t) {
     } else SMK.L = Math.max(0, SMK.L - SM.drain * dt);
     if (SMK.prog >= 100 && !SMK.done) {
       SMK.done = true; SMK.holding = false;
+      breathStop(); sfx("correct");
       const r = S.room;
       SMK.fin = r.phaseAt && r.phaseAt.toMillis ? now - r.phaseAt.toMillis() : 0;
       smSend(true);
@@ -1939,11 +2094,13 @@ function smPress(e) {
   if (Date.now() < SMK.coughUntil) return;
   if (SMK.L > SM.reArm) { smCough("덜 내쉬고 또 들이마셨어요!"); return; }
   SMK.holding = true;
+  breathStart();
   smLoop();
 }
 function smRelease() {
   if (!SMK.holding) return;
   SMK.holding = false;
+  breathStop(); sfx("exhale");
   smPuff();
   if (SK.pendingRender) { SK.pendingRender = false; render(); }
 }
@@ -2327,9 +2484,19 @@ document.addEventListener("keydown", function (e) { if (e.key === "Escape") clos
 const root = document.getElementById("bf-root");
 const main = h("main", { class: "wrap" });
 const opChip = h("span", { class: "op-chip", text: "두목", hidden: true });
+const soundBtn = h("button", { type: "button", class: "snd-btn", "aria-label": SND.on ? "소리 끄기" : "소리 켜기", text: SND.on ? "🔊" : "🔇",
+  onclick: function () { setSound(!SND.on); } });
+function setSound(on) {
+  SND.on = on;
+  try { localStorage.setItem("bf-sound", on ? "on" : "off"); } catch (e) {}
+  if (!on) breathStop(); else { ac(); sfx("pop"); }
+  soundBtn.textContent = on ? "🔊" : "🔇";
+  soundBtn.setAttribute("aria-label", on ? "소리 끄기" : "소리 켜기");
+  toast(on ? "효과음을 켰어요." : "효과음을 껐어요.");
+}
 const header = h("div", { class: "filebar wrap" },
   h("span", { class: "brand" }, logo("logo-s"), h("span", null, h("b", { text: "불주먹조직" }), " · 비밀본부")),
-  h("span", { class: "fb-right" }, opChip, h("span", { class: "lvl", text: "기밀 등급 A" })));
+  h("span", { class: "fb-right" }, soundBtn, opChip, h("span", { class: "lvl", text: "기밀 등급 A" })));
 const TABS = [["hq", "본부"], ["members", "조직원"], ["games", "게임방"], ["guestbook", "방명록"]];
 const tabEls = {};
 const tabbar = h("nav", { class: "tabbar", "aria-label": "주 메뉴" },

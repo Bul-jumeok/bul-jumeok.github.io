@@ -688,3 +688,5 @@ img { max-width: 100%; }
 .kn-say { font-size: 13px; background: var(--fg); color: var(--bg); padding: 2px 8px; border-radius: 10px; }
 .kn-name { font-size: 12px; color: var(--muted); padding-top: 6px; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { .v-photo { animation: none; transform: rotate(-80deg); } .sm-cig .body { transition: none; } }
+
+.snd-btn { background: none; border: 1px solid var(--line); border-radius: 3px; min-height: 28px; min-width: 32px; padding: 0 6px; font-size: 13px; line-height: 1; }
