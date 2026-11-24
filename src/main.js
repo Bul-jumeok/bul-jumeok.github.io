@@ -1362,8 +1362,8 @@ const INKS = ["#1b1b1d", "#d2382f", "#2f6fd2", "#2f9e57", "#e2a21b", "#8a4fc9", 
 const SK = { canvas: null, ctx: null, turnKey: null, unsub: null, strokes: [], drawing: false, pendingRender: false, cur: null, color: INKS[0], size: 8, eraser: false, flushT: null };
 
 /* Surprise names: never announced in the UI. Default list until the boss saves one. */
-const SK_DEFAULT_NAMES = ["주먹이"];
-const SK_SURPRISE = 0.2;
+const SK_DEFAULT_NAMES = ["주먹이", "연상퀴즈", "올라올라", "서바이벌꼬로록"];
+const SK_SURPRISE = 0.1;
 function skCrewWords() {
   const seen = {}, out = [];
   function add(w) { w = String(w || "").trim(); if (w && !seen[w]) { seen[w] = 1; out.push(w); } }
@@ -1373,7 +1373,9 @@ function skCrewWords() {
 }
 function skPickWord(mode, used) {
   const crew = skCrewWords(), general = SK_WORDS;
-  const pool = crew.length && Math.random() < SK_SURPRISE ? crew : general;
+  /* rare: about one drawing in ten, and at most once per game */
+  const already = (used || []).some(function (w) { return crew.indexOf(w) >= 0; });
+  const pool = crew.length && !already && Math.random() < SK_SURPRISE ? crew : general;
   let fresh = pool.filter(function (w) { return (used || []).indexOf(w) < 0; });
   if (!fresh.length) fresh = pool;
   return fresh[Math.floor(Math.random() * fresh.length)];
@@ -1649,8 +1651,8 @@ function skNamesPanel() {
   return h("details", { class: "guide" },
     h("summary", { text: "깜짝 제시어 이름 · 두목만 보여요" }),
     h("div", { class: "guide-body" },
-      h("p", { class: "note", text: "다섯 판에 한 번꼴로 조직원 닉네임이나 아래 이름이 제시어로 나와요. 조직원 닉네임은 명부에서 자동으로 들어가요. 조직원들에게는 비밀이에요." }),
-      h("p", { class: "sub-label", text: "추가로 넣을 이름" }),
+      h("p", { class: "note", text: "그림 열 번에 한 번꼴로, 한 판에 최대 한 번만 조직원 닉네임이나 아래 단어가 제시어로 나와요. 조직원 닉네임은 명부에서 자동으로 들어가요. 조직원들에게는 비밀이에요." }),
+      h("p", { class: "sub-label", text: "추가로 넣을 단어 (우리끼리 아는 이름, 큐플레이 키워드 등)" }),
       ta,
       h("button", { type: "button", class: "save", onclick: async function () {
         const seen = {};
