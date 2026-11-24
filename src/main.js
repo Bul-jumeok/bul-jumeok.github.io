@@ -470,7 +470,11 @@ function screenGames() {
 }
 
 /* ---------- Liar: lobby list ---------- */
-const STATUS_LABEL = { lobby: "대기 중", hint: "설명 중", vote: "투표 중", guess: "라이어 반격", result: "결과 발표" };
+const STATUS_LABEL = { lobby: "대기 중", hint: "설명 중", discuss: "토론 중", vote: "투표 중", guess: "라이어 반격", result: "결과 발표" };
+/* Seconds per phase. ?emu&fast shortens them for local tests. */
+const FAST = EMU && new URLSearchParams(location.search).has("fast");
+const DUR = { hint: 30, discuss: 120, vote: 30, guess: 20 };
+if (FAST) Object.keys(DUR).forEach(function (k) { DUR[k] = Math.max(2, Math.round(DUR[k] / 10)); });
 function screenLiarLobby() {
   const me = meMember();
   const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed"; });
@@ -505,9 +509,10 @@ function liarRules() {
         h("li", { text: "방을 만들고 단톡방에 알려요. 다들 게임방 → 라이어에서 그 방을 눌러 참가해요." }),
         h("li", { text: "3명 이상 모이면 아무나 ‘게임 시작’을 눌러요. 만든 사람도 라이어가 누군지 몰라요." }),
         h("li", { text: "각자 카드를 몰래 확인해요. 라이어에게는 주제만 보여요." }),
-        h("li", { text: "자기 차례가 오면 제시어를 한 마디로 설명해요. 단어를 그대로 쓰면 안 돼요." }),
-        h("li", { text: "설명이 끝나면 라이어로 의심되는 사람에게 투표해요." }),
-        h("li", { text: "라이어를 맞히면 라이어에게 마지막 기회가 있어요. 제시어를 맞히면 라이어 승리, 못 맞히면 조직원 승리. 동점이거나 엉뚱한 사람을 지목하면 라이어 승리예요." })),
+        h("li", { text: "랜덤 순서로 한 명씩 제시어를 한 마디로 설명해요. 한 사람당 30초, 시간이 지나면 다음 사람으로 넘어가요." }),
+        h("li", { text: "설명이 끝나면 2분 동안 대화창에서 토론해요. 절반 이상이 ‘바로 투표하기’를 누르면 일찍 끝나요." }),
+        h("li", { text: "30초 안에 라이어로 의심되는 사람에게 투표해요." }),
+        h("li", { text: "라이어를 맞히면 라이어에게 20초의 마지막 기회가 있어요. 제시어를 맞히면 라이어 승리, 못 맞히면 조직원 승리. 동점이거나 엉뚱한 사람을 지목하면 라이어 승리예요." })),
       h("p", { class: "note", text: "바보 모드에서는 라이어도 같은 주제의 다른 단어를 받아서, 자기가 라이어인지 모른 채 설명해요." })));
 }
 async function createRoom() {
@@ -547,7 +552,8 @@ async function startGame() {
       tx.update(roomRef(), {
         status: "hint", lineup: lineup, seed: seed, topic: { name: topic.name, words: topic.words },
         order: d.order, turn: 0, votes: {}, accused: null, guess: null, winner: null, reason: null,
-        game: (r.game || 0) + 1, startedAt: serverTimestamp()
+        game: (r.game || 0) + 1, startedAt: serverTimestamp(),
+        phase: (r.phase || 0) + 1, phaseAt: serverTimestamp(), readyVote: []
       });
     });
     S.flipped = {};
@@ -565,22 +571,46 @@ async function sendMsg(kind, text) {
     game: r ? (r.game || 0) : 0, createdAt: serverTimestamp()
   });
 }
-async function advanceTurn(kind, text) {
+function nextPhase(r, patch) {
+  return Object.assign({ phase: (r.phase || 0) + 1, phaseAt: serverTimestamp() }, patch);
+}
+async function advanceTurn(kind, text, expectPhase) {
   const me = meMember();
   await runTransaction(db, async function (tx) {
     const snap = await tx.get(roomRef()); const r = snap.data();
     if (!r || r.status !== "hint") throw { code: "phase" };
+    if (expectPhase != null && r.phase !== expectPhase) throw { code: "phase" };
     const n = r.order.length, speaker = r.order[r.turn % n];
     if (kind === "hint" && speaker !== (me && me.id)) throw { code: "turn" };
     const mref = doc(collection(db, "rooms", S.roomId, "msgs"));
     tx.set(mref, {
       uid: myUid(), memberId: me ? me.id : null, nick: me ? me.nick : "손님",
-      text: kind === "hint" ? text : nickOf(speaker) + " 차례를 넘겼어요.",
-      kind: kind, game: r.game || 0, round: Math.floor(r.turn / n) + 1, speaker: speaker, createdAt: serverTimestamp()
+      text: kind === "hint" ? text : kind === "timeout" ? nickOf(speaker) + " 시간 초과! 다음 사람 차례예요." : nickOf(speaker) + " 차례를 넘겼어요.",
+      kind: kind === "hint" ? "hint" : "skip", game: r.game || 0, round: Math.floor(r.turn / n) + 1, speaker: speaker, createdAt: serverTimestamp()
     });
     const next = r.turn + 1;
-    tx.update(roomRef(), next >= n * (r.rounds || 1) ? { turn: next, status: "vote" } : { turn: next });
+    tx.update(roomRef(), nextPhase(r, next >= n * (r.rounds || 1) ? { turn: next, status: "discuss", readyVote: [] } : { turn: next }));
   });
+}
+async function toVote(expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "discuss") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    tx.update(roomRef(), nextPhase(r, { status: "vote" }));
+  });
+}
+async function readyToVote() {
+  const me = meMember(); if (!me) return;
+  try {
+    await updateDoc(roomRef(), { readyVote: arrayUnion(me.id) });
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "discuss") return;
+      const need = Math.ceil((r.lineup || []).length / 2);
+      if ((r.readyVote || []).length >= need) tx.update(roomRef(), nextPhase(r, { status: "vote" }));
+    });
+  } catch (e) { toast(errText(e)); }
 }
 async function castVote(target) {
   const me = meMember(); if (!me) return;
@@ -589,11 +619,12 @@ async function castVote(target) {
     await finalizeVotes(false);
   } catch (e) { toast(errText(e)); }
 }
-async function finalizeVotes(force) {
+async function finalizeVotes(force, expectPhase) {
   try {
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "vote") return;
+      if (expectPhase != null && r.phase !== expectPhase) return;
       const votes = r.votes || {}, lineup = r.lineup || [];
       const voted = lineup.filter(function (p) { return votes[p]; });
       if (!force && voted.length < lineup.length) return;
@@ -602,27 +633,69 @@ async function finalizeVotes(force) {
       voted.forEach(function (p) { tally[votes[p]] = (tally[votes[p]] || 0) + 1; });
       let max = 0; Object.keys(tally).forEach(function (k) { if (tally[k] > max) max = tally[k]; });
       const top = Object.keys(tally).filter(function (k) { return tally[k] === max; });
-      if (!voted.length) tx.update(roomRef(), { status: "result", winner: "liar", accused: null, reason: "아무도 투표하지 않았어요." });
-      else if (top.length > 1) tx.update(roomRef(), { status: "result", winner: "liar", accused: null, reason: "표가 똑같이 갈려서 라이어를 잡지 못했어요." });
-      else if (top[0] !== d.liar) tx.update(roomRef(), { status: "result", winner: "liar", accused: top[0], reason: "엉뚱한 사람을 지목했어요." });
-      else tx.update(roomRef(), { status: "guess", accused: top[0] });
+      if (!voted.length) tx.update(roomRef(), nextPhase(r, { status: "result", winner: "liar", accused: null, reason: "아무도 투표하지 않았어요." }));
+      else if (top.length > 1) tx.update(roomRef(), nextPhase(r, { status: "result", winner: "liar", accused: null, reason: "표가 똑같이 갈려서 라이어를 잡지 못했어요." }));
+      else if (top[0] !== d.liar) tx.update(roomRef(), nextPhase(r, { status: "result", winner: "liar", accused: top[0], reason: "엉뚱한 사람을 지목했어요." }));
+      else tx.update(roomRef(), nextPhase(r, { status: "guess", accused: top[0] }));
     });
   } catch (e) { toast(errText(e)); }
 }
-async function submitGuess(text) {
+async function submitGuess(text, timedOut, expectPhase) {
   await runTransaction(db, async function (tx) {
     const snap = await tx.get(roomRef()); const r = snap.data();
     if (!r || r.status !== "guess") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
     const d = dealFull(r.lineup, r.seed, r.topic.words);
     const ok = text && normWord(text) === normWord(d.word);
-    tx.update(roomRef(), {
+    tx.update(roomRef(), nextPhase(r, {
       status: "result", guess: text || "", winner: ok ? "liar" : "team",
-      reason: ok ? "라이어가 제시어를 맞혔어요." : (text ? "라이어가 제시어를 맞히지 못했어요." : "라이어가 맞히기를 포기했어요.")
-    });
+      reason: ok ? "라이어가 제시어를 맞혔어요." : timedOut ? "라이어가 20초 안에 제시어를 맞히지 못했어요." : (text ? "라이어가 제시어를 맞히지 못했어요." : "라이어가 맞히기를 포기했어요.")
+    }));
   });
 }
+
+/* ---------- Liar: phase timers ---------- */
+const GRACE_MS = 1500;
+let lastTimeoutKey = "";
+function phaseEnd(r) {
+  if (!r || !DUR[r.status] || !r.phaseAt || !r.phaseAt.toMillis) return null;
+  return r.phaseAt.toMillis() + DUR[r.status] * 1000;
+}
+function fmtSec(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function timerEl(r, label) {
+  const end = phaseEnd(r), total = (DUR[r.status] || 1) * 1000;
+  const left = end == null ? total : end - Date.now();
+  const sec = Math.max(0, Math.ceil(left / 1000));
+  const bar = h("i"); bar.style.width = Math.max(0, Math.min(100, left / total * 100)) + "%";
+  return h("div", { class: "timer" + (sec <= 10 ? " low" : ""), role: "timer" },
+    h("span", { class: "t-label", text: label }), h("b", { class: "t-num", text: fmtSec(sec) }), h("span", { class: "t-bar" }, bar));
+}
+async function onTimeout(r) {
+  if (r.status === "hint") return advanceTurn("timeout", null, r.phase);
+  if (r.status === "discuss") return toVote(r.phase);
+  if (r.status === "vote") return finalizeVotes(true, r.phase);
+  if (r.status === "guess") return submitGuess("", true, r.phase);
+}
+setInterval(function () {
+  const r = S.room;
+  if (!r || currentRoute().indexOf("room-") !== 0) return;
+  const end = phaseEnd(r);
+  if (end == null) return;
+  const left = end - Date.now(), total = DUR[r.status] * 1000;
+  const sec = Math.max(0, Math.ceil(left / 1000));
+  document.querySelectorAll(".timer").forEach(function (el) {
+    el.querySelector(".t-num").textContent = fmtSec(sec);
+    el.querySelector(".t-bar i").style.width = Math.max(0, Math.min(100, left / total * 100)) + "%";
+    el.classList.toggle("low", sec <= 10);
+  });
+  const key = r.id + ":" + r.phase;
+  if (left < -GRACE_MS && lastTimeoutKey !== key && S.user) {
+    lastTimeoutKey = key;
+    onTimeout(r).catch(function () {});
+  }
+}, 500);
 async function backToLobby() {
-  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null });
+  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null });
 }
 
 function screenRoom(id) {
@@ -657,6 +730,7 @@ function screenRoom(id) {
   let phase;
   if (r.status === "lobby") phase = lobbyPanel(r, me, inRoom, players);
   else if (r.status === "hint") phase = hintPanel(r, me, isPlayer, d);
+  else if (r.status === "discuss") phase = discussPanel(r, me, isPlayer);
   else if (r.status === "vote") phase = votePanel(r, me, isPlayer);
   else if (r.status === "guess") phase = guessPanel(r, me, d);
   else phase = resultPanel(r, d, me, isPlayer);
@@ -694,19 +768,11 @@ function lobbyPanel(r, me, inRoom, players) {
     h("p", { class: "hint", text: "단톡방에 ‘게임방 → 라이어에 방 열었어요’라고 알려주세요." }));
 }
 function myCard(r, me, d) {
-  const key = r.id + ":" + r.game;
-  if (!S.flipped[key]) {
-    return h("button", { type: "button", class: "secret-card face-down", onclick: function () { S.flipped[key] = true; render(); } },
-      h("span", { class: "sc-eyebrow", text: "극비 · " + me.nick + " 전용" }),
-      h("span", { class: "sc-big", text: "카드 뒤집기" }),
-      h("span", { class: "sc-hint", text: "내 제시어를 확인하세요." }));
-  }
   const isLiar = d.liar === me.id, showLiar = isLiar && r.mode === 0;
   return h("div", { class: "secret-card front compact" + (showLiar ? " liar" : "") },
-    h("span", { class: "sc-eyebrow", text: "주제 · " + r.topic.name }),
+    h("span", { class: "sc-eyebrow", text: "내 카드 · 주제 " + r.topic.name }),
     h("span", { class: "sc-big", text: showLiar ? "당신은 라이어" : (isLiar ? d.fool : d.word) }),
-    h("span", { class: "sc-hint", text: showLiar ? "제시어를 몰라요. 들키지 않게 둘러대세요." : "단어를 그대로 쓰지 말고 설명하세요." }),
-    h("button", { type: "button", class: "ghost", onclick: function () { S.flipped[key] = false; render(); }, text: "다시 가리기" }));
+    h("span", { class: "sc-hint", text: showLiar ? "제시어를 몰라요. 다른 사람 설명을 듣고 들키지 않게 둘러대세요." : "단어를 그대로 쓰지 말고 설명하세요." }));
 }
 function hintPanel(r, me, isPlayer, d) {
   const n = r.order.length, speaker = r.order[r.turn % n], round = Math.floor(r.turn / n) + 1;
@@ -715,6 +781,7 @@ function hintPanel(r, me, isPlayer, d) {
   const box = h("div", { class: "panel turn" + (myTurn ? " mine" : "") },
     h("div", { class: "field-label", text: round + "바퀴 · " + (r.turn + 1) + " / " + total + "번째 설명" }),
     h("div", { class: "turn-now" }, h("span", { class: "eyebrow", text: "지금 차례" }), h("b", { text: myTurn ? "내 차례예요!" : nickOf(speaker) })),
+    timerEl(r, myTurn ? "내 설명 남은 시간" : nickOf(speaker) + " 남은 시간"),
     h("ol", { class: "order mini" }, r.order.map(function (p, i) {
       return h("li", { class: (i === r.turn % n ? "now" : "") + (me && p === me.id ? " me" : "") }, h("span", { text: nickOf(p) }));
     })));
@@ -727,7 +794,7 @@ function hintPanel(r, me, isPlayer, d) {
       if (!t) return;
       if (d && normWord(t).indexOf(normWord(d.word)) >= 0 && d.liar !== me.id) { toast("제시어를 그대로 쓰면 안 돼요."); return; }
       try { await advanceTurn("hint", t); S.drafts["hint-text"] = ""; render(); }
-      catch (e) { toast(e && e.code === "turn" ? "지금은 내 차례가 아니에요." : errText(e)); }
+      catch (e) { toast(e && (e.code === "turn" || e.code === "phase") ? "시간이 지나서 차례가 넘어갔어요." : errText(e)); }
     });
     append(box, f);
   } else {
@@ -737,20 +804,33 @@ function hintPanel(r, me, isPlayer, d) {
   }
   return box;
 }
+function discussPanel(r, me, isPlayer) {
+  const need = Math.ceil((r.lineup || []).length / 2), ready = r.readyVote || [];
+  const mine = me && ready.indexOf(me.id) >= 0;
+  return h("div", { class: "panel turn" },
+    h("div", { class: "field-label", text: "토론 시간" }),
+    timerEl(r, "토론 남은 시간"),
+    h("p", { text: "설명이 끝났어요. 아래 대화창에서 누가 라이어인지 이야기해 보세요." }),
+    isPlayer
+      ? h("button", { type: "button", class: mine ? "ghost wide" : "save", disabled: mine, onclick: readyToVote },
+          (mine ? "바로 투표에 찬성했어요 " : "바로 투표하기 ") + "(" + ready.length + "/" + need + ")")
+      : null,
+    h("p", { class: "hint", text: "참가자 절반 이상이 ‘바로 투표하기’를 누르면 2분이 지나기 전에 투표로 넘어가요." }));
+}
 function votePanel(r, me, isPlayer) {
   const votes = r.votes || {}, lineup = r.lineup || [];
   const doneCount = lineup.filter(function (p) { return votes[p]; }).length;
   const mine = me ? votes[me.id] : null;
   return h("div", { class: "panel" },
     h("div", { class: "field-label", text: "투표 · " + doneCount + " / " + lineup.length + "명 완료" }),
+    timerEl(r, "투표 남은 시간"),
     isPlayer
       ? h("div", { class: "vote-grid" }, lineup.filter(function (p) { return p !== me.id; }).map(function (p) {
           return h("button", { type: "button", class: "vote-btn", "aria-pressed": mine === p ? "true" : "false", onclick: function () { castVote(p); } },
             h("div", { class: "vp" }, photoBox(findMember(p) || {})), h("span", { text: nickOf(p) }));
         }))
       : h("p", { class: "note", text: "참가자들이 투표하고 있어요." }),
-    isPlayer ? h("p", { class: "hint", text: mine ? "‘" + nickOf(mine) + "’에게 투표했어요. 다른 사람을 누르면 바꿀 수 있어요." : "라이어라고 생각하는 사람을 누르세요." }) : null,
-    h("button", { type: "button", class: "link-btn", onclick: function () { finalizeVotes(true); }, text: "투표 마감하기 (안 온 사람이 있을 때)" }));
+    isPlayer ? h("p", { class: "hint", text: mine ? "‘" + nickOf(mine) + "’에게 투표했어요. 다른 사람을 누르면 바꿀 수 있어요." : "라이어라고 생각하는 사람을 누르세요. 시간이 끝나면 그때까지 받은 표로 집계해요." }) : null);
 }
 function guessPanel(r, me, d) {
   const accused = r.accused;
@@ -763,6 +843,7 @@ function guessPanel(r, me, d) {
     });
     return h("div", { class: "panel turn mine" },
       h("div", { class: "field-label", text: "라이어의 마지막 기회" }),
+      timerEl(r, "정답 남은 시간"),
       h("p", { text: r.mode === 1 ? "들켰어요! 당신이 라이어였어요. 진짜 제시어를 맞히면 역전승이에요." : "들켰어요! 제시어를 맞히면 역전승이에요." }),
       h("p", { class: "note", text: "주제: " + r.topic.name }),
       f,
@@ -770,8 +851,8 @@ function guessPanel(r, me, d) {
   }
   return h("div", { class: "panel turn" },
     h("div", { class: "field-label", text: "라이어 검거" }),
-    h("p", null, h("b", { text: nickOf(accused) }), "님이 라이어로 지목됐어요. 제시어를 맞히는 중이에요…"),
-    h("button", { type: "button", class: "link-btn", onclick: function () { submitGuess(""); }, text: "라이어가 자리를 비웠으면 결과 보기" }));
+    timerEl(r, "라이어 남은 시간"),
+    h("p", null, h("b", { text: nickOf(accused) }), "님이 라이어로 지목됐어요. 제시어를 맞히는 중이에요…"));
 }
 function resultPanel(r, d, me, isPlayer) {
   const teamWin = r.winner === "team";
@@ -805,7 +886,7 @@ function chatBox(r, me) {
           m.kind === "hint" ? h("span", { class: "b-tag", text: (m.round || 1) + "바퀴 설명" }) : null),
         h("div", { class: "b-text", text: m.text }));
     }) : h("div", { class: "msg-sys", text: "아직 대화가 없어요." }));
-  const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "120", placeholder: "잡담 보내기", autocomplete: "off" });
+  const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "120", placeholder: r.status === "discuss" ? "토론 메시지 보내기" : "잡담 보내기", autocomplete: "off" });
   const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm", text: "보내기" }));
   f.addEventListener("submit", async function (ev) {
     ev.preventDefault();
