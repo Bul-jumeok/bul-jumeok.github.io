@@ -6,7 +6,7 @@ import {
 import {
   getFirestore, connectFirestoreEmulator, collection, doc, onSnapshot, query, orderBy, limit, limitToLast, where,
   setDoc, addDoc, updateDoc, deleteDoc, writeBatch, runTransaction, serverTimestamp,
-  arrayUnion, arrayRemove, Timestamp
+  arrayUnion, arrayRemove, Timestamp, deleteField
 } from "firebase/firestore";
 import LOGO from "./logo.txt";
 
@@ -425,12 +425,51 @@ function subscribeBase() {
     S.roomsReady = true; render();
   }, function () { S.roomsReady = true; render(); });
 }
+/* ---------- room presence: a room with nobody looking at it disappears from the lists ---------- */
+const ALIVE_MS = 60000, PRESENT_MS = 45000;
+let beatT = null;
+function tsMs(t) { return t && t.toMillis ? t.toMillis() : 0; }
+function roomAlive(r) {
+  if (!r || !r.status || r.status === "closed") return false;
+  const now = Date.now();
+  if (now - tsMs(r.createdAt) < ALIVE_MS) return true;
+  const seen = r.seen || {};
+  return Object.keys(seen).some(function (k) { return now - tsMs(seen[k] && seen[k].t) < ALIVE_MS; });
+}
+/* players who are actually in the room right now (falls back to everyone if presence is unknown) */
+function presentPlayers(r) {
+  const seen = r.seen || {}, now = Date.now(), here = {};
+  let known = false;
+  Object.keys(seen).forEach(function (k) { const v = seen[k]; if (v && v.m) { known = true; if (now - tsMs(v.t) < PRESENT_MS) here[v.m] = true; } });
+  return (r.players || []).filter(function (p) { return !!findMember(p) && (!known || here[p]); });
+}
+function beat(id) {
+  const uid = myUid(); if (!uid || !id) return;
+  const me = meMember();
+  updateDoc(doc(db, "rooms", id), { ["seen." + uid]: { t: serverTimestamp(), m: me ? me.id : null } }).catch(function () {});
+}
+function unbeat(id) {
+  const uid = myUid(); if (!uid || !id) return;
+  updateDoc(doc(db, "rooms", id), { ["seen." + uid]: deleteField() }).catch(function () {});
+}
+document.addEventListener("visibilitychange", function () {
+  if (!S.roomId) return;
+  if (document.visibilityState === "visible") beat(S.roomId); else unbeat(S.roomId);
+});
+window.addEventListener("pagehide", function () { if (S.roomId) unbeat(S.roomId); });
+/* lists drop rooms that went quiet even when nothing else changes */
+setInterval(function () { const r = currentRoute(); if (r === "hq" || r.indexOf("game-") === 0) render(); }, 5000);
+
 let roomUnsubs = [];
 function watchRoom(id) {
   if (S.roomId === id) return;
   roomUnsubs.forEach(function (u) { u(); }); roomUnsubs = [];
+  clearInterval(beatT); beatT = null;
+  if (S.roomId) unbeat(S.roomId);
   S.roomId = id; S.room = null; S.roomMissing = false; S.msgs = [];
   if (!id) return;
+  beat(id);
+  beatT = setInterval(function () { if (document.visibilityState !== "hidden") beat(id); }, 15000);
   let msgsLoaded = false;
   roomUnsubs.push(onSnapshot(doc(db, "rooms", id), function (snap) {
     const prev = S.room;
@@ -492,7 +531,7 @@ async function importSeed() {
 /* ---------- screens: HQ ---------- */
 function screenHQ() {
   const n = S.members.length;
-  const openRooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed"; }).length;
+  const openRooms = S.rooms.filter(roomAlive).length;
   return h("section", { class: "screen" },
     n ? h("div", { class: "whoami" },
       h("div", null, h("span", { class: "eyebrow", text: "현재 신원" }), h("b", { text: meLabel() })),
@@ -672,7 +711,7 @@ const DUR = { hint: 20, discuss: 120, vote: 20, guess: 20 };
 if (FAST) Object.keys(DUR).forEach(function (k) { DUR[k] = Math.max(2, Math.round(DUR[k] / FAST)); });
 function screenLiarLobby() {
   const me = meMember();
-  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && (!r.type || r.type === "liar"); });
+  const rooms = S.rooms.filter(function (r) { return roomAlive(r) && (!r.type || r.type === "liar"); });
   const list = rooms.length
     ? h("ul", { class: "room-list" }, rooms.map(function (r) {
         const mine = me && (r.players || []).indexOf(me.id) >= 0;
@@ -740,7 +779,7 @@ async function startGame() {
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "lobby") throw { code: "phase" };
-      const lineup = (r.players || []).filter(function (p) { return !!findMember(p); }).slice().sort();
+      const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 3) throw { code: "few" };
       const topic = r.topicChoice >= 0 && LIAR_DEFAULT_TOPICS[r.topicChoice] ? LIAR_DEFAULT_TOPICS[r.topicChoice] : custom[Math.floor(Math.random() * custom.length)];
       const seed = Math.floor(Math.random() * 2147483647);
@@ -1150,7 +1189,7 @@ async function startMafia() {
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "lobby") throw { code: "phase" };
-      const lineup = (r.players || []).filter(function (p) { return !!findMember(p); }).slice().sort();
+      const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 4) throw { code: "few" };
       const game = (r.game || 0) + 1;
       sysMsg(tx, { game: game }, "🌙 첫 번째 밤이 되었어요. 마피아는 조용히 움직이세요.");
@@ -1296,7 +1335,7 @@ function mafiaTimeout(r) {
 
 function screenMafiaLobby() {
   const me = meMember();
-  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type === "mafia"; });
+  const rooms = S.rooms.filter(function (r) { return roomAlive(r) && r.type === "mafia"; });
   const list = rooms.length
     ? h("ul", { class: "room-list" }, rooms.map(function (r) {
         const mine = me && (r.players || []).indexOf(me.id) >= 0;
@@ -1595,7 +1634,7 @@ async function startSketch() {
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "lobby") throw { code: "phase" };
-      const lineup = (r.players || []).filter(function (p) { return !!findMember(p); }).slice().sort();
+      const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 2) throw { code: "few" };
       const order = lineup.slice();
       for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
@@ -1802,7 +1841,7 @@ function skTools() {
 
 function screenSketchLobby() {
   const me = meMember();
-  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type === "sketch"; });
+  const rooms = S.rooms.filter(function (r) { return roomAlive(r) && r.type === "sketch"; });
   const list = rooms.length
     ? h("ul", { class: "room-list" }, rooms.map(function (r) {
         const mine = me && (r.players || []).indexOf(me.id) >= 0;
@@ -2011,7 +2050,7 @@ async function smStart() {
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "lobby") throw { code: "phase" };
-      const lineup = (r.players || []).filter(function (p) { return !!findMember(p); }).slice().sort();
+      const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 2) throw { code: "few" };
       const game = (r.game || 0) + 1;
       sysMsg(tx, { game: game }, "🚬 빨리 담배피기 시작! 꼴찌는 킬러가 처리합니다.");
@@ -2216,7 +2255,7 @@ document.addEventListener("keyup", function (e) { if (e.code === "Space") smRele
 
 function screenSmokeLobby() {
   const me = meMember();
-  const rooms = S.rooms.filter(function (r) { return r.status && r.status !== "closed" && r.type === "smoke"; });
+  const rooms = S.rooms.filter(function (r) { return roomAlive(r) && r.type === "smoke"; });
   const list = rooms.length
     ? h("ul", { class: "room-list" }, rooms.map(function (r) {
         const mine = me && (r.players || []).indexOf(me.id) >= 0;
