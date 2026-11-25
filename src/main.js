@@ -1,11 +1,12 @@
 import { initializeApp } from "firebase/app";
 import {
   getAuth, connectAuthEmulator, onAuthStateChanged, signInAnonymously,
-  GoogleAuthProvider, signInWithPopup, signOut, signInWithCredential
+  GoogleAuthProvider, signInWithPopup, signOut, signInWithCredential,
+  EmailAuthProvider, linkWithCredential, signInWithEmailAndPassword
 } from "firebase/auth";
 import {
   getFirestore, connectFirestoreEmulator, collection, doc, onSnapshot, query, orderBy, limit, limitToLast, where,
-  setDoc, addDoc, updateDoc, deleteDoc, getDoc, writeBatch, runTransaction, serverTimestamp,
+  setDoc, addDoc, updateDoc, deleteDoc, getDoc, getDocs, writeBatch, runTransaction, serverTimestamp,
   arrayUnion, arrayRemove, Timestamp, deleteField
 } from "firebase/firestore";
 import LOGO from "./logo.txt";
@@ -33,6 +34,10 @@ if (EMU) {
     },
     tryWriteMember: function () { return setDoc(doc(db, "members", "hack"), { nick: "hack", no: 99 }); },
     tryDeleteGuest: function (id) { return deleteDoc(doc(db, "guestbook", id)); },
+    tryGet: function (path) { return getDoc(doc(db, path)).then(function (d) { return d.exists() ? "READ" : "MISSING"; }, function (e) { return e.code; }); },
+    tryList: function (coll) { return getDocs(collection(db, coll)).then(function (q) { return "LISTED " + q.size; }, function (e) { return e.code; }); },
+    tryWrite: function (path, data) { return setDoc(doc(db, path), data).then(function () { return "WROTE"; }, function (e) { return e.code; }); },
+    mt: function () { return MT; },
     state: function () { return S; }
   };
 }
@@ -977,6 +982,340 @@ function screenTips() {
     })) : h("div", { class: "empty", text: S.tipsReady ? (boss ? "아직 들어온 제보가 없어요." : "아직 공개된 제보가 없어요.") : "제보함을 여는 중…" }));
 }
 
+
+/* ---------- 크리스마스 마니또 + 몰래 칭찬 일지 ----------
+   Identity: each participant links a hidden email account (made from their member id) with a 4-digit PIN,
+   so the same Firebase uid follows them to any phone. Security rules key every secret on that uid:
+   - manitoSecret/{member}: who I drew. Only I can read it until the reveal.
+   - manitoPraise/{id}: my praise log. Only I can read, edit or delete it before the reveal;
+     after the reveal only I and the person I praised can read it. Nobody else, the boss included.
+   - manitoGuess/{member}: my guess. Mine until the reveal. */
+const MANITO_GOAL = 2;
+const PRAISE_EXAMPLE = "오늘 마피아에서 추리 진짜 잘하더라!";
+const MT = { state: null, stateKnown: false, players: {}, secret: null, praise: [], guess: null,
+  secrets: [], received: [], guesses: [], subKey: "", unsubs: [], busy: false, confirm: null, pinMode: null };
+const MT_ANY_DATE = EMU && new URLSearchParams(location.search).has("anydate");
+
+onSnapshot(doc(db, "config", "manito"), function (snap) { MT.state = snap.exists() ? snap.data() : null; MT.stateKnown = true; render(); },
+  function () { MT.stateKnown = true; render(); });
+onSnapshot(collection(db, "manitoPlayers"), function (snap) {
+  const p = {}; snap.docs.forEach(function (d) { p[d.id] = d.data(); }); MT.players = p; render();
+});
+
+function mtEmail(m) {
+  const n = (MT.state && MT.state.resets && MT.state.resets[m]) || 0;
+  return (m + "-" + n + "@manito.bulfist.app").toLowerCase();
+}
+function mtPw(pin) { return "bfm-" + pin + "-pin"; }
+function mtPhase() { return MT.state ? MT.state.phase : null; }
+function mtMe() { const me = meMember(); return me && MT.players[me.id] ? me : null; }
+/* this phone is signed in as the participant it claims to be */
+function mtAuthed() { const me = mtMe(); return !!(me && S.user && MT.players[me.id].uid === S.user.uid); }
+function mtRevealDay() { const d = new Date(); return MT_ANY_DATE || (d.getMonth() === 11 && d.getDate() >= 25) || d.getMonth() === 0; }
+
+function mtEnsureSubs() {
+  const me = meMember(), uid = myUid(), ph = mtPhase();
+  const drawn = !!(me && MT.state && (MT.state.drawn || []).indexOf(me.id) >= 0);
+  const key = [uid, me ? me.id : "", ph, mtAuthed(), drawn].join(":");
+  if (key === MT.subKey) return;
+  MT.subKey = key;
+  MT.unsubs.forEach(function (u) { u(); }); MT.unsubs = [];
+  MT.secret = null; MT.praise = []; MT.guess = null; MT.secrets = []; MT.received = []; MT.guesses = [];
+  if (!uid || !me || !ph) return;
+  function sub(ref, fn) { MT.unsubs.push(onSnapshot(ref, fn, function () {})); }
+  if (mtAuthed()) {
+    sub(doc(db, "manitoSecret", me.id), function (d) { MT.secret = d.exists() ? d.data() : null; render(); });
+    sub(query(collection(db, "manitoPraise"), where("uid", "==", uid)), function (q) {
+      MT.praise = q.docs.map(function (d) { return Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })); })
+        .sort(function (a, b) { return a.date.localeCompare(b.date) || tsMs(a.createdAt) - tsMs(b.createdAt); });
+      render();
+    });
+    sub(doc(db, "manitoGuess", me.id), function (d) { MT.guess = d.exists() ? d.data().guess : null; render(); });
+  }
+  if (ph === "revealed") {
+    sub(collection(db, "manitoSecret"), function (q) { MT.secrets = q.docs.map(function (d) { return { id: d.id, target: d.data().target }; }); render(); });
+    sub(collection(db, "manitoGuess"), function (q) { MT.guesses = q.docs.map(function (d) { return { id: d.id, guess: d.data().guess }; }); render(); });
+    if (mtAuthed()) sub(query(collection(db, "manitoPraise"), where("toUid", "==", uid)), function (q) {
+      MT.received = q.docs.map(function (d) { return d.data({ serverTimestamps: "estimate" }); })
+        .sort(function (a, b) { return a.date.localeCompare(b.date) || tsMs(a.createdAt) - tsMs(b.createdAt); });
+      render();
+    });
+  }
+}
+
+/* ----- joining, signing in, drawing ----- */
+async function mtJoin(pin) {
+  const me = meMember(); if (!me) return;
+  const cred = EmailAuthProvider.credential(mtEmail(me.id), mtPw(pin));
+  try { await linkWithCredential(auth.currentUser, cred); }
+  catch (e) {
+    const c = (e && e.code) || "";
+    if (/email-already-in-use|credential-already-in-use|provider-already-linked/.test(c)) await signInWithEmailAndPassword(auth, mtEmail(me.id), mtPw(pin));
+    else throw e;
+  }
+  await auth.currentUser.getIdToken(true);
+  await setDoc(doc(db, "manitoPlayers", me.id), { uid: auth.currentUser.uid, joinedAt: serverTimestamp() });
+}
+async function mtLogin(pin) {
+  const me = meMember(); if (!me) return;
+  await signInWithEmailAndPassword(auth, mtEmail(me.id), mtPw(pin));
+}
+function mtAuthError(e) {
+  const c = (e && e.code) || "";
+  if (/wrong-password|invalid-credential|invalid-login|user-not-found/.test(c)) return "비밀번호가 맞지 않아요.";
+  if (/too-many-requests/.test(c)) return "비밀번호를 너무 많이 틀렸어요. 잠시 뒤 다시 해 주세요.";
+  if (/operation-not-allowed/.test(c)) return "두목이 Firebase에서 ‘이메일/비밀번호’ 로그인을 켜야 해요.";
+  if (/permission-denied/.test(c)) return "이미 다른 폰에서 이 이름으로 참가했어요. 비밀번호로 들어가기를 눌러 주세요.";
+  return errText(e);
+}
+async function mtDraw() {
+  const me = mtMe(); if (!me || MT.busy) return;
+  MT.busy = true; render();
+  try {
+    await runTransaction(db, async function (tx) {
+      const ref = doc(db, "config", "manito"), st = (await tx.get(ref)).data();
+      if (!st || st.phase !== "draw") throw { code: "phase" };
+      const drawn = st.drawn || [], left = st.left || [];
+      if (drawn.indexOf(me.id) >= 0) throw { code: "done" };
+      const undrawn = (st.players || []).filter(function (p) { return drawn.indexOf(p) < 0; });
+      let options = left.filter(function (t) { return t !== me.id; });
+      /* never leave the last person with only themselves */
+      if (undrawn.length === 2) { const other = undrawn.find(function (p) { return p !== me.id; }); if (left.indexOf(other) >= 0) options = [other]; }
+      if (!options.length) throw { code: "stuck" };
+      const target = options[Math.floor(Math.random() * options.length)];
+      tx.set(doc(db, "manitoSecret", me.id), { uid: myUid(), target: target, drawnAt: serverTimestamp() });
+      tx.update(ref, { left: left.filter(function (t) { return t !== target; }), drawn: drawn.concat([me.id]) });
+    });
+    sfx("flip");
+  } catch (e) { toast(e && e.code === "done" ? "이미 뽑았어요." : errText(e)); }
+  MT.busy = false; render();
+}
+
+/* ----- boss controls ----- */
+async function mtBoss(patch, msg) { try { await setDoc(doc(db, "config", "manito"), patch, { merge: true }); if (msg) toast(msg); } catch (e) { toast(errText(e)); } }
+function mtOpen() { return mtBoss({ phase: "signup", season: String(new Date().getFullYear()), resets: (MT.state && MT.state.resets) || {}, players: [], drawn: [], left: [], openedAt: serverTimestamp() }, "마니또 참가 신청을 열었어요."); }
+function mtCloseSignup() {
+  const list = Object.keys(MT.players).filter(function (m) { return !!findMember(m); }).sort();
+  if (list.length < 3) { toast("3명 이상 참가해야 뽑기를 시작할 수 있어요."); return; }
+  return mtBoss({ phase: "draw", players: list, left: list.slice(), drawn: [] }, "참가 마감! 이제 각자 마니또를 뽑아요.");
+}
+function mtReveal() { return mtBoss({ phase: "revealed", revealedAt: serverTimestamp() }, "정체를 공개했어요! 🎄"); }
+async function mtResetPlayer(m) {
+  try {
+    const resets = Object.assign({}, (MT.state && MT.state.resets) || {}); resets[m] = (resets[m] || 0) + 1;
+    await deleteDoc(doc(db, "manitoPlayers", m));
+    await setDoc(doc(db, "config", "manito"), { resets: resets }, { merge: true });
+    toast(nickOf(m) + "님 참가를 취소했어요. 다시 참가 신청하면 새 비밀번호를 정할 수 있어요.");
+  } catch (e) { toast(errText(e)); }
+}
+
+/* ----- praise log ----- */
+function openPraiseEditor(pr) {
+  const me = mtMe(), target = MT.secret && MT.secret.target;
+  if (!me || !target) return;
+  const date = h("input", { type: "date", id: "pr-date", value: pr ? pr.date : todayStr(), max: todayStr() });
+  const text = h("textarea", { id: "pr-text", maxlength: "200", placeholder: "예: " + PRAISE_EXAMPLE });
+  text.value = pr ? pr.text : "";
+  const msg = h("p", { class: "msg", role: "status" });
+  const saveBtn = h("button", { type: "submit", class: "save", text: pr ? "수정 내용 저장" : "칭찬 기록 저장" });
+  const del = h("div");
+  function drawDel(c) {
+    if (!pr) return;
+    del.replaceChildren(c
+      ? h("div", { class: "confirm" }, h("p", { text: "이 칭찬 기록을 지울까요?" }), h("div", { class: "op-row" },
+          h("button", { type: "button", onclick: function () { drawDel(false); }, text: "취소" }),
+          h("button", { type: "button", class: "danger", onclick: async function () {
+            try { await deleteDoc(doc(db, "manitoPraise", pr.id)); closeEditor(); toast("칭찬 기록을 지웠어요."); } catch (e) { msg.className = "msg err"; msg.textContent = errText(e); }
+          }, text: "지우기" })))
+      : h("button", { type: "button", class: "ghost", onclick: function () { drawDel(true); }, text: "이 기록 지우기" }));
+  }
+  const form = h("form", { class: "form", novalidate: true },
+    h("p", { class: "note", text: "실제로 " + nickOf(target) + "님을 칭찬한 뒤에 기록하세요. 이 기록은 크리스마스 정체 공개 전까지 나만 볼 수 있어요. 상대에게 알림도 가지 않아요." }),
+    h("label", null, h("b", { text: "칭찬한 날짜" }), date),
+    h("label", null, h("b", { text: "어떤 말을 했나요?" }), text),
+    msg, saveBtn, del);
+  form.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = text.value.trim(), d = date.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { msg.className = "msg err"; msg.textContent = "날짜를 골라주세요."; return; }
+    if (d > todayStr()) { msg.className = "msg err"; msg.textContent = "아직 오지 않은 날짜예요."; return; }
+    if (!t) { msg.className = "msg err"; msg.textContent = "어떤 말을 했는지 적어주세요."; return; }
+    saveBtn.disabled = true; saveBtn.textContent = "저장 중…";
+    try {
+      if (pr) await updateDoc(doc(db, "manitoPraise", pr.id), { date: d, text: t, updatedAt: serverTimestamp() });
+      else await addDoc(collection(db, "manitoPraise"), { uid: myUid(), from: me.id, to: target, toUid: MT.players[target].uid, date: d, text: t, createdAt: serverTimestamp() });
+      closeEditor();
+      const days = {}; MT.praise.concat([{ date: d }]).forEach(function (x) { days[x.date] = 1; });
+      toast(pr ? "칭찬 기록을 고쳤어요." : fmtDate(d) + " 칭찬 미션 완료! (" + Math.min(Object.keys(days).length, MANITO_GOAL) + "/" + MANITO_GOAL + ")");
+    } catch (e) { saveBtn.disabled = false; saveBtn.textContent = pr ? "수정 내용 저장" : "칭찬 기록 저장"; msg.className = "msg err"; msg.textContent = errText(e); }
+  });
+  openSheet("몰래 칭찬 일지 · 나만 보여요", pr ? "칭찬 기록 수정" : "칭찬 기록하기", form);
+  drawDel(false);
+}
+
+/* ----- screens ----- */
+function mtPinForm(mode) {
+  const p1 = h("input", { type: "password", id: "mt-pin", inputmode: "numeric", maxlength: "4", autocomplete: "off", placeholder: "숫자 4자리" });
+  const p2 = mode === "join" ? h("input", { type: "password", id: "mt-pin2", inputmode: "numeric", maxlength: "4", autocomplete: "off", placeholder: "한 번 더" }) : null;
+  const msg = h("p", { class: "msg", role: "status" });
+  const btn = h("button", { type: "submit", class: "save", text: mode === "join" ? "비밀번호 정하고 참가하기" : "들어가기" });
+  const f = h("form", { class: "panel", novalidate: true },
+    h("div", { class: "field-label", text: mode === "join" ? "마니또 비밀번호 정하기" : "마니또 비밀번호" }),
+    h("p", { class: "note", text: mode === "join" ? "내 마니또와 칭찬 일지를 지키는 번호예요. 다른 폰에서 들어올 때도 이 번호를 써요. 잊으면 두목에게 참가 취소를 부탁해야 해요." : "참가할 때 정한 숫자 4자리를 넣어 주세요." }),
+    p1, p2, msg, btn,
+    h("button", { type: "button", class: "link-btn", onclick: function () { MT.pinMode = null; render(); }, text: "취소" }));
+  f.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const a = p1.value.trim();
+    if (!/^\d{4}$/.test(a)) { msg.className = "msg err"; msg.textContent = "숫자 4자리로 넣어 주세요."; return; }
+    if (p2 && p2.value.trim() !== a) { msg.className = "msg err"; msg.textContent = "두 번 넣은 번호가 달라요."; return; }
+    btn.disabled = true; msg.className = "msg"; msg.textContent = "확인 중…";
+    try {
+      if (mode === "join") { await mtJoin(a); toast("마니또에 참가했어요! 🎄"); }
+      else { await mtLogin(a); toast("들어왔어요."); }
+      MT.pinMode = null; render();
+    } catch (e) { btn.disabled = false; msg.className = "msg err"; msg.textContent = mtAuthError(e); }
+  });
+  return f;
+}
+function mtHeader(sub) {
+  return h("div", { class: "sec-head" },
+    h("div", null, h("span", { class: "eyebrow", text: "G-07 · 12월 25일 정체 공개" }), h("h2", { text: "🎄 크리스마스 마니또" }), h("p", { text: sub })));
+}
+function mtRules() {
+  return h("details", { class: "guide" },
+    h("summary", { text: "마니또 규칙" }),
+    h("div", { class: "guide-body" },
+      h("ol", null,
+        h("li", { text: "참가 신청할 때 마니또 비밀번호(숫자 4자리)를 정해요." }),
+        h("li", { text: "두목이 참가를 마감하면 각자 [마니또 뽑기]로 몰래 챙겨줄 사람을 뽑아요. 결과는 나만 봐요." }),
+        h("li", { text: "칭찬 미션: 크리스마스 전까지 게임이나 채팅에서 내 마니또 상대를 서로 다른 날에 2번 이상 자연스럽게 칭찬해요." }),
+        h("li", { text: "칭찬한 뒤 [칭찬 기록하기]로 날짜와 한 말을 적으면 그날 미션이 완료돼요. 같은 날 여러 번 적어도 하루 한 번만 인정돼요." }),
+        h("li", { text: "내 마니또가 누군지 추리해서 제출할 수 있어요. 안 해도 돼요." }),
+        h("li", { text: "12월 25일 두목이 [정체 공개]를 누르면, 누가 누구의 마니또였는지와 내가 받은 칭찬이 공개돼요." })),
+      h("p", { class: "note", text: "칭찬 기록은 공개 전에는 쓴 사람만, 공개 후에는 쓴 사람과 받은 사람만 볼 수 있어요. 두목도 볼 수 없어요." })));
+}
+function screenManito() {
+  const back = h("button", { class: "back", type: "button", onclick: function () { go("games"); }, text: "게임방으로" });
+  const me = meMember(), ph = mtPhase(), boss = isBoss();
+  if (!MT.stateKnown) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "마니또를 불러오는 중…" }));
+  if (!ph) {
+    return h("section", { class: "screen" }, back, mtHeader("아직 마니또가 열리지 않았어요."), mtRules(),
+      boss ? h("button", { type: "button", class: "save", onclick: mtOpen, text: "마니또 참가 신청 열기 (두목)" }) : h("div", { class: "empty", text: "두목이 마니또를 열면 참가할 수 있어요." }));
+  }
+  const joined = me && MT.players[me.id];
+  const authed = mtAuthed();
+  const playerList = Object.keys(MT.players).filter(function (m) { return !!findMember(m); });
+  const roster = h("div", { class: "chips" }, (ph === "signup" ? playerList : (MT.state.players || [])).map(function (m) {
+    const drawn = ph === "draw" && (MT.state.drawn || []).indexOf(m) >= 0;
+    return h("span", { class: "chip static" + (me && m === me.id ? " me" : "") + (drawn ? " done" : "") }, nickOf(m) + (drawn ? " ✓" : ""));
+  }));
+  const parts = [back];
+
+  if (ph === "signup") {
+    parts.push(mtHeader("참가 신청 중이에요. 참가 " + playerList.length + "명"), h("div", { class: "field" }, h("div", { class: "field-label", text: "참가자" }), playerList.length ? roster : h("p", { class: "note", text: "아직 아무도 없어요." })));
+    if (!me) parts.push(h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." }));
+    else if (MT.pinMode) parts.push(mtPinForm(MT.pinMode));
+    else if (!joined) parts.push(h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "join"; render(); }, text: "🎁 참가 신청하기" }));
+    else if (!authed) parts.push(h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" }));
+    else parts.push(h("div", { class: "panel" }, h("p", { text: "참가 완료! 두목이 마감하면 마니또를 뽑을 수 있어요." })));
+    if (boss) parts.push(h("div", { class: "panel" }, h("div", { class: "field-label", text: "두목 전용" }),
+      h("button", { type: "button", class: "save", onclick: mtCloseSignup, text: "참가 마감하고 뽑기 시작" }),
+      playerList.length ? h("div", { class: "chips" }, playerList.map(function (m) {
+        return h("button", { type: "button", class: "chip", onclick: function () { mtResetPlayer(m); }, text: nickOf(m) + " 참가 취소" });
+      })) : null,
+      h("p", { class: "hint", text: "비밀번호를 잊은 사람은 참가 취소 후 다시 신청하면 돼요." })));
+    parts.push(mtRules());
+    return h("section", { class: "screen" }, parts);
+  }
+
+  const isPlayer = me && (MT.state.players || []).indexOf(me.id) >= 0;
+  if (ph === "draw") {
+    const drawnN = (MT.state.drawn || []).length, total = (MT.state.players || []).length;
+    parts.push(mtHeader("뽑기 " + drawnN + "/" + total + "명 완료 · 크리스마스까지 몰래 칭찬해요"), h("div", { class: "field" }, h("div", { class: "field-label", text: "참가자" }), roster));
+    if (!isPlayer) parts.push(h("div", { class: "empty", text: "이번 마니또 참가자가 아니에요. 크리스마스에 공개되는 배정표를 기다려 주세요." }));
+    else if (MT.pinMode) parts.push(mtPinForm(MT.pinMode));
+    else if (!authed) parts.push(h("div", { class: "panel" }, h("p", { text: "내 마니또와 칭찬 일지를 보려면 비밀번호가 필요해요." }),
+      h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" })));
+    else if (!MT.secret) parts.push(h("div", { class: "panel mt-draw" },
+      h("p", { text: "몰래 챙겨줄 사람을 뽑아요. 결과는 나만 볼 수 있어요." }),
+      h("button", { type: "button", class: "save", disabled: MT.busy, onclick: mtDraw, text: MT.busy ? "뽑는 중…" : "🎁 마니또 뽑기" })));
+    else {
+      const t = findMember(MT.secret.target) || { nick: nickOf(MT.secret.target) };
+      const days = {}; MT.praise.forEach(function (x) { days[x.date] = (days[x.date] || 0) + 1; });
+      const dayList = Object.keys(days).sort(), done = Math.min(dayList.length, MANITO_GOAL);
+      parts.push(
+        h("div", { class: "mt-target" }, h("span", { class: "sc-eyebrow", text: "내가 몰래 챙길 사람 · 나만 보여요" }),
+          h("div", { class: "mt-photo" }, photoBox(t)), h("b", { class: "mt-name", text: t.nick })),
+        h("div", { class: "panel mt-mission" + (dayList.length >= MANITO_GOAL ? " clear" : "") },
+          h("div", { class: "field-label", text: "칭찬 미션" }),
+          h("p", { class: "mt-progress" }, h("b", { text: done + " / " + MANITO_GOAL + "일" }), dayList.length >= MANITO_GOAL ? " 미션 완료! 🎉" : " · 서로 다른 날 " + MANITO_GOAL + "번 칭찬하기"),
+          h("div", { class: "mt-days" }, Array.from({ length: Math.max(MANITO_GOAL, dayList.length) }).map(function (_, i) {
+            const d = dayList[i];
+            return h("span", { class: "mt-day" + (d ? " on" : "") }, d ? "✓ " + fmtDate(d) + (days[d] > 1 ? " (" + days[d] + "건)" : "") : "아직");
+          })),
+          h("p", { class: "hint", text: "같은 날 여러 번 적어도 미션은 하루 한 번만 인정돼요." }),
+          h("button", { type: "button", class: "save", onclick: function () { openPraiseEditor(null); }, text: "✍️ 칭찬 기록하기" })),
+        h("div", { class: "field" }, h("div", { class: "field-label", text: "몰래 칭찬 일지 · 나만 보여요 " + MT.praise.length + "건" }),
+          MT.praise.length ? h("ul", { class: "mt-log" }, MT.praise.map(function (x) {
+            return h("li", null, h("button", { type: "button", class: "mt-entry", onclick: function () { openPraiseEditor(x); } },
+              h("span", { class: "ci-date", text: fmtDate(x.date) }), h("span", { class: "mt-text", text: "“" + x.text + "”" }), h("small", { text: "눌러서 수정·삭제" })));
+          })) : h("p", { class: "note", text: "아직 기록이 없어요. 예: “" + PRAISE_EXAMPLE + "”" })),
+        h("div", { class: "panel" }, h("div", { class: "field-label", text: "내 마니또 추리 (선택)" }),
+          h("p", { class: "note", text: "나를 몰래 챙겨주는 사람이 누구일까요? 공개 전까지 바꿀 수 있어요." }),
+          h("div", { class: "chips" }, (MT.state.players || []).filter(function (m) { return m !== me.id; }).map(function (m) {
+            return h("button", { type: "button", class: "chip", "aria-pressed": MT.guess === m ? "true" : "false", onclick: async function () {
+              try { await setDoc(doc(db, "manitoGuess", me.id), { uid: myUid(), guess: m, updatedAt: serverTimestamp() }); sfx("click"); } catch (e) { toast(errText(e)); }
+            }, text: nickOf(m) });
+          })),
+          h("p", { class: "hint", text: MT.guess ? "지금 추리: " + nickOf(MT.guess) : "아직 추리하지 않았어요." })));
+    }
+    if (boss) {
+      const ok = mtRevealDay(), allDrawn = drawnN === total;
+      parts.push(h("div", { class: "panel" }, h("div", { class: "field-label", text: "두목 전용" }),
+        MT.confirm === "reveal"
+          ? h("div", { class: "confirm" }, h("p", { text: "정체를 공개할까요? 배정표와 칭찬 기록이 공개되고, 그 뒤로는 칭찬 기록을 고칠 수 없어요." }),
+              h("div", { class: "op-row" }, h("button", { type: "button", onclick: function () { MT.confirm = null; render(); }, text: "취소" }),
+                h("button", { type: "button", class: "go", onclick: function () { MT.confirm = null; mtReveal(); }, text: "🎄 정체 공개" })))
+          : h("button", { type: "button", class: "save", disabled: !ok || !allDrawn, onclick: function () { MT.confirm = "reveal"; render(); },
+              text: !allDrawn ? "모두 뽑아야 공개할 수 있어요 (" + drawnN + "/" + total + ")" : ok ? "🎄 정체 공개" : "정체 공개는 12월 25일부터 할 수 있어요" })));
+    }
+    parts.push(mtRules());
+    return h("section", { class: "screen" }, parts);
+  }
+
+  /* revealed */
+  const giverOf = {}; MT.secrets.forEach(function (x) { giverOf[x.target] = x.id; });
+  const guessOf = {}; MT.guesses.forEach(function (x) { guessOf[x.id] = x.guess; });
+  parts.push(mtHeader("정체 공개! 🎄 메리 크리스마스"));
+  if (isPlayer && !authed && !MT.pinMode) parts.push(h("div", { class: "panel" }, h("p", { text: "내가 받은 칭찬을 보려면 비밀번호로 들어와 주세요." }),
+    h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" })));
+  else if (isPlayer && MT.pinMode) parts.push(mtPinForm(MT.pinMode));
+  if (isPlayer) {
+    const giver = giverOf[me.id], gm = giver && (findMember(giver) || { nick: nickOf(giver) });
+    const myGuess = guessOf[me.id];
+    parts.push(h("div", { class: "mt-target reveal" },
+      h("span", { class: "sc-eyebrow", text: "나의 마니또는…" }),
+      gm ? h("div", { class: "mt-photo" }, photoBox(gm)) : null,
+      h("b", { class: "mt-name", text: gm ? gm.nick : "확인 중…" }),
+      h("span", { class: "mt-guess", text: myGuess ? (myGuess === giver ? "🎯 내 추리 적중! (" + nickOf(myGuess) + ")" : "내 추리: " + nickOf(myGuess) + " · 아쉽게 빗나갔어요") : "추리는 제출하지 않았어요" })));
+    if (authed) parts.push(h("div", { class: "field" }, h("div", { class: "field-label", text: "내 마니또가 남긴 칭찬 " + MT.received.length + "건" }),
+      MT.received.length ? h("ul", { class: "mt-log" }, MT.received.map(function (x) {
+        return h("li", null, h("div", { class: "mt-entry got" }, h("span", { class: "ci-date", text: fmtDate(x.date) }), h("span", { class: "mt-text", text: "“" + x.text + "”" })));
+      })) : h("p", { class: "note", text: "남겨진 칭찬 기록이 없어요." })),
+      h("div", { class: "field" }, h("div", { class: "field-label", text: "내가 남긴 칭찬 " + MT.praise.length + "건" + (MT.secret ? " · " + nickOf(MT.secret.target) + "님에게" : "") }),
+        MT.praise.length ? h("ul", { class: "mt-log" }, MT.praise.map(function (x) {
+          return h("li", null, h("div", { class: "mt-entry" }, h("span", { class: "ci-date", text: fmtDate(x.date) }), h("span", { class: "mt-text", text: "“" + x.text + "”" })));
+        })) : h("p", { class: "note", text: "남긴 칭찬 기록이 없어요." })));
+  }
+  parts.push(h("div", { class: "field" }, h("div", { class: "field-label", text: "전체 배정표 · 마니또 → 챙겨준 사람" }),
+    h("ul", { class: "mt-table" }, (MT.state.players || []).map(function (m) {
+      const t = MT.secrets.find(function (x) { return x.id === m; });
+      return h("li", null, h("span", { text: nickOf(m) }), h("span", { class: "arrow", text: "→" }), h("b", { text: t ? nickOf(t.target) : "?" }));
+    }))));
+  return h("section", { class: "screen" }, parts);
+}
+
 /* ---------- screens: HQ ---------- */
 function screenHQ() {
   const n = S.members.length;
@@ -1015,9 +1354,10 @@ function screenHQ() {
     bossPanel()
   );
 }
+function isGoogleUser(u) { return !!(u && (u.providerData || []).some(function (p) { return p.providerId === "google.com"; })); }
 function bossPanel() {
   const u = S.user;
-  if (!u || u.isAnonymous) {
+  if (!u || u.isAnonymous || !isGoogleUser(u)) {
     return h("div", { class: "boss-row" }, h("button", { type: "button", class: "link-btn", onclick: bossLogin, text: "두목 로그인" }));
   }
   if (S.bossKnown && !S.bossUid) {
@@ -1146,7 +1486,8 @@ const GAMES = [
   { id: "yut", code: "G-03", name: "윷놀이", desc: "도·개·걸·윷·모로 가리는 본부 서열.", ready: false },
   { id: "liar", code: "G-04", name: "라이어", desc: "혼자만 제시어를 모르는 사람을 찾아라.", ready: true },
   { id: "sketch", code: "G-05", name: "드로잉퀴즈", desc: "한 명은 그리고, 나머지는 맞혀라.", ready: true },
-  { id: "smoke", code: "G-06", name: "빨리 담배피기", desc: "들숨 날숨 타이밍 싸움. 꼴찌는 킬러가 처리한다.", ready: true }
+  { id: "smoke", code: "G-06", name: "빨리 담배피기", desc: "들숨 날숨 타이밍 싸움. 꼴찌는 킬러가 처리한다.", ready: true },
+  { id: "manito", code: "G-07", name: "크리스마스 마니또", desc: "몰래 칭찬하고, 크리스마스에 정체 공개.", ready: true }
 ];
 const GAME_NAME = { liar: "라이어", mafia: "마피아", sketch: "드로잉퀴즈", smoke: "빨리 담배피기" };
 function screenOpenRooms() {
@@ -3122,6 +3463,7 @@ function draw() {
 
   const r = currentRoute();
   ensureTipsSub();
+  mtEnsureSubs();
   let tab = "hq", view;
   if (!S.membersReady) {
     view = h("section", { class: "screen" }, h("div", { class: "empty", text: "본부 문을 여는 중…" }));
@@ -3143,6 +3485,7 @@ function draw() {
   else if (r === "gather") view = screenGathers();
   else if (r.indexOf("gather-") === 0) view = screenGather(r.slice(7));
   else if (r === "tips") view = screenTips();
+  else if (r === "game-manito") { tab = "games"; view = screenManito(); }
   else view = screenHQ();
   if (r.indexOf("room-") !== 0) { watchRoom(null); skWatch(null); smWatch(null); }
   if (r !== lastRoute) S.confirmDelete = false;

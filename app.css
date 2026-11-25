@@ -813,3 +813,26 @@ img { max-width: 100%; }
 .lb-x { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); right: max(12px, env(safe-area-inset-right, 0px)); width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.4); background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 18px; }
 .lb-hint { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); margin: 0; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 12px; }
 .case-title { padding-right: 78px; }
+
+/* manito */
+.mt-target { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 18px; border: 1px solid var(--red); background: var(--red-soft); }
+.mt-target.reveal { border-color: #3fa86b; background: rgba(63, 168, 107, 0.1); }
+.mt-photo { width: 110px; height: 110px; overflow: hidden; background: var(--raised); border: 1px solid var(--line); }
+.mt-name { font-family: var(--font-display); font-size: 34px; font-weight: 400; line-height: 1.1; }
+.mt-guess { font-size: 13px; color: var(--muted); }
+.mt-mission.clear { border-color: #3fa86b; }
+.mt-progress { font-size: 14px; color: var(--muted); }
+.mt-progress b { font: 600 22px var(--font-mono); color: var(--fg); }
+.mt-days { display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-day { font-size: 13px; padding: 5px 10px; border: 1px dashed var(--line); color: var(--faint); border-radius: 999px; }
+.mt-day.on { border-style: solid; border-color: #3fa86b; color: var(--fg); background: rgba(63, 168, 107, 0.12); }
+.mt-log { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.mt-entry { width: 100%; display: grid; gap: 3px; text-align: left; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); color: var(--fg); }
+.mt-entry.got { border-color: #3fa86b; }
+.mt-entry small { font-size: 11px; color: var(--faint); }
+.mt-text { font-size: 15px; overflow-wrap: anywhere; }
+.mt-table { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.mt-table li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 9px 12px; background: var(--surface); border: 1px solid var(--line); }
+.mt-table .arrow { color: var(--red); font-family: var(--font-mono); }
+.mt-table b { text-align: right; }
+.form input[type="password"], .panel input[type="password"] { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 11px 12px; font-size: 20px; letter-spacing: 0.4em; color: var(--fg); }

@@ -17,6 +17,60 @@ service cloud.firestore {
       allow update, delete: if isBoss();
     }
 
+    // Christmas manito. Secrets are keyed on the participant's own sign-in (made with their 4-digit PIN).
+    function mState() { return get(/databases/$(database)/documents/config/manito).data; }
+    function mPhase() { return exists(/databases/$(database)/documents/config/manito) ? mState().phase : ''; }
+    function mPlayerUid(m) { return get(/databases/$(database)/documents/manitoPlayers/$(m)).data.uid; }
+    function mEmail(m) { return m + '-' + string(mState().resets.get(m, 0)) + '@manito.bulfist.app'; }
+    function ownsEmail(e) {
+      return request.auth.token.email == e
+        || e in request.auth.token.firebase.identities.get('email', []);
+    }
+    match /config/manito {
+      allow read: if true;
+      allow write: if isBoss();
+      // a participant's own draw: removes exactly their drawn target from `left` and adds themselves to `drawn`
+      allow update: if signedIn() && resource.data.phase == 'draw'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['left', 'drawn'])
+        && request.resource.data.drawn.size() == resource.data.drawn.size() + 1
+        && request.resource.data.left.size() == resource.data.left.size() - 1
+        && mPlayerUid(request.resource.data.drawn[request.resource.data.drawn.size() - 1]) == request.auth.uid
+        && getAfter(/databases/$(database)/documents/manitoSecret/$(request.resource.data.drawn[request.resource.data.drawn.size() - 1])).data.target in resource.data.left
+        && !(getAfter(/databases/$(database)/documents/manitoSecret/$(request.resource.data.drawn[request.resource.data.drawn.size() - 1])).data.target in request.resource.data.left);
+    }
+    match /manitoPlayers/{m} {
+      allow read: if true;
+      allow create: if signedIn() && mPhase() == 'signup'
+        && request.resource.data.uid == request.auth.uid && ownsEmail(mEmail(m));
+      allow delete: if isBoss() && mPhase() == 'signup';
+    }
+    match /manitoSecret/{m} {
+      allow read: if signedIn() && (resource == null || resource.data.uid == request.auth.uid || mPhase() == 'revealed');
+      allow create: if signedIn() && mPhase() == 'draw' && mPlayerUid(m) == request.auth.uid
+        && request.resource.data.uid == request.auth.uid && request.resource.data.target != m;
+    }
+    match /manitoGuess/{m} {
+      allow read: if signedIn() && (resource == null || resource.data.uid == request.auth.uid || mPhase() == 'revealed');
+      allow write: if signedIn() && mPhase() == 'draw' && mPlayerUid(m) == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+    }
+    match /manitoPraise/{id} {
+      // only the writer before the reveal; the writer and the person praised after it. Nobody else, the boss included.
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid
+        || (mPhase() == 'revealed' && resource.data.toUid == request.auth.uid));
+      allow create: if signedIn() && mPhase() == 'draw'
+        && request.resource.data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/manitoSecret/$(request.resource.data.from)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/manitoSecret/$(request.resource.data.from)).data.target == request.resource.data.to
+        && mPlayerUid(request.resource.data.to) == request.resource.data.toUid
+        && shortText(request.resource.data.text, 200)
+        && request.resource.data.date is string;
+      allow update: if signedIn() && mPhase() == 'draw' && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'date', 'updatedAt'])
+        && shortText(request.resource.data.text, 200);
+      allow delete: if signedIn() && mPhase() == 'draw' && resource.data.uid == request.auth.uid;
+    }
+
     // Other settings (e.g. the sketch game's surprise names): only the boss writes.
     match /config/{docId} {
       allow read: if true;
