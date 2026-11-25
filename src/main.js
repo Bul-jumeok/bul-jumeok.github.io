@@ -295,15 +295,15 @@ function sfx(name) {
 /* ---------- 배경음악: 직접 합성한 잔잔한 루프 (저작권 걱정 없음) ---------- */
 const BGM = { on: true, mood: null, master: null, timer: null, next: 0, bar: 0 };
 try { BGM.on = localStorage.getItem("bf-bgm") !== "off"; } catch (e) {}
-const BGM_VOL = 0.15;
+const BGM_VOL = 0.18;
 if (EMU) window.__bgm = BGM;
-/* chords as MIDI notes; bar = seconds per chord; arp = chance of a soft note on each step */
+/* 8-bit game music: drums, a bouncing bass and a lead melody. bpm per mood, 4 chords (MIDI roots + chord tones) */
 const MOODS = {
-  lounge: { bar: 3.6, step: 0.45, swing: 0.07, arp: 0.38, vol: 1, cut: 1900, chords: [[50, 53, 57, 60], [43, 53, 55, 59], [48, 52, 55, 59], [45, 52, 55, 60]] },
-  calm:   { bar: 4.4, step: 0.55, swing: 0, arp: 0.32, vol: 0.9, cut: 1500, chords: [[48, 55, 59, 64], [45, 52, 55, 60], [41, 48, 52, 57], [43, 50, 55, 59]] },
-  play:   { bar: 3.0, step: 0.375, swing: 0.05, arp: 0.42, vol: 0.85, cut: 2200, chords: [[41, 53, 57, 60], [48, 52, 55, 60], [50, 53, 57, 62], [46, 53, 58, 62]] },
-  mafia:  { bar: 4.0, step: 0.5, swing: 0, arp: 0.28, vol: 0.9, cut: 1400, chords: [[45, 52, 57, 60], [41, 48, 53, 57], [48, 52, 55, 60], [40, 47, 52, 56]] },
-  night:  { bar: 5.2, step: 0.65, swing: 0, arp: 0.18, vol: 0.85, cut: 900, chords: [[38, 50, 53, 57], [46, 50, 53, 58], [43, 50, 55, 58], [45, 49, 52, 57]] }
+  lounge: { bpm: 124, swing: 0.12, vol: 1, cut: 5200, lead: "square", chords: [[45, 57, 60, 64], [41, 57, 60, 65], [48, 60, 64, 67], [43, 59, 62, 67]], mel: [0, 2, 1, 3, 2, 1, 0, 1] },
+  calm:   { bpm: 132, swing: 0, vol: 0.95, cut: 5600, lead: "square", chords: [[41, 57, 60, 65], [43, 59, 62, 67], [40, 55, 59, 64], [45, 57, 60, 64]], mel: [0, 1, 2, 3, 2, 3, 1, 2] },
+  play:   { bpm: 146, swing: 0, vol: 0.95, cut: 6500, lead: "square", chords: [[48, 60, 64, 67], [43, 59, 62, 67], [45, 57, 60, 64], [41, 57, 60, 65]], mel: [0, 2, 3, 2, 1, 2, 3, 1] },
+  mafia:  { bpm: 112, swing: 0, vol: 0.9, cut: 4200, lead: "triangle", chords: [[45, 57, 60, 64], [45, 57, 60, 64], [41, 57, 60, 65], [40, 56, 59, 64]], mel: [0, 0, 2, 1, 3, 2, 1, 0] },
+  night:  { bpm: 96, swing: 0, vol: 0.85, cut: 2600, lead: "triangle", chords: [[38, 50, 53, 57], [38, 50, 53, 57], [46, 50, 53, 58], [45, 49, 52, 57]], mel: [0, 2, 1, 0, 3, 2, 1, 2], dark: true }
 };
 function midiHz(n) { return 440 * Math.pow(2, (n - 69) / 12); }
 function bgmMoodFor() {
@@ -339,34 +339,49 @@ function bgmTick() {
     BGM.master = g; BGM.next = c.currentTime + 0.15; BGM.bar = 0;
   }
   if (BGM.next < c.currentTime) BGM.next = c.currentTime + 0.05;
-  while (BGM.next < c.currentTime + 1.5) { bgmBar(c, M, BGM.next); BGM.next += M.bar; BGM.bar++; }
+  while (BGM.next < c.currentTime + 1.5) { bgmBar(c, M, BGM.next); BGM.next += 240 / M.bpm; BGM.bar++; }
 }
 function bgmVoice(c, out, hz, t, dur, o) {
   const os = c.createOscillator(), g = c.createGain();
-  os.type = o.type || "sine"; os.frequency.setValueAtTime(hz, t);
-  if (o.detune) os.detune.setValueAtTime(o.detune, t);
+  os.type = o.type || "square"; os.frequency.setValueAtTime(hz, t);
+  if (o.slide) os.frequency.exponentialRampToValueAtTime(o.slide, t + dur);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(o.gain, t + o.attack);
-  g.gain.setTargetAtTime(0.0001, t + Math.max(o.attack, dur - o.release), o.release / 3);
+  g.gain.linearRampToValueAtTime(o.gain, t + (o.attack || 0.005));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   os.connect(g); g.connect(out);
-  os.start(t); os.stop(t + dur + o.release);
+  os.start(t); os.stop(t + dur + 0.02);
 }
+function bgmNoise(c, out, t, dur, f, gain, type) {
+  const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = noiseBuf(c); fl.type = type || "highpass"; fl.frequency.value = f;
+  g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(fl); fl.connect(g); g.connect(out);
+  src.start(t, Math.random()); src.stop(t + dur + 0.02);
+}
+/* one bar = 16 sixteenth notes */
 function bgmBar(c, M, t) {
-  const out = BGM.master, chord = M.chords[BGM.bar % M.chords.length];
-  /* soft pad */
-  chord.forEach(function (n, i) {
-    bgmVoice(c, out, midiHz(n + 12), t, M.bar + 0.6, { type: "sine", gain: 0.05, attack: 1.2, release: 1.4 });
-    bgmVoice(c, out, midiHz(n + 12), t, M.bar + 0.6, { type: "triangle", gain: 0.018, attack: 1.4, release: 1.4, detune: i % 2 ? 6 : -6 });
-  });
-  /* bass */
-  bgmVoice(c, out, midiHz(chord[0] - 12), t, M.bar * 0.9, { type: "sine", gain: 0.11, attack: 0.08, release: 1.0 });
-  /* gentle plucks */
-  const steps = Math.floor(M.bar / M.step), tones = chord.map(function (n) { return n + 24; }).concat(chord.map(function (n) { return n + 36; }))
-    .filter(function (n) { return n >= 62 && n <= 86; });
-  for (let i = 1; i < steps; i++) {
-    if (Math.random() > M.arp) continue;
-    const n = tones[Math.floor(Math.random() * tones.length)];
-    bgmVoice(c, out, midiHz(n), t + i * M.step + (i % 2 ? M.swing : 0), 1.1, { type: "sine", gain: 0.045, attack: 0.012, release: 0.9 });
+  const out = BGM.master, bar = BGM.bar, chord = M.chords[bar % M.chords.length];
+  const st = 60 / M.bpm / 4;
+  function at(i) { return t + i * st + (i % 2 ? M.swing * st : 0); }
+  for (let i = 0; i < 16; i++) {
+    const tt = at(i);
+    /* drums */
+    if (i === 0 || i === 8 || (!M.dark && i === 10 && bar % 2)) bgmVoice(c, out, 150, tt, 0.16, { type: "sine", gain: 0.5, slide: 42 });
+    if (!M.dark && (i === 4 || i === 12)) { bgmNoise(c, out, tt, 0.12, 1800, 0.18); bgmVoice(c, out, 210, tt, 0.07, { type: "triangle", gain: 0.12, slide: 120 }); }
+    if (M.dark && i === 12) bgmNoise(c, out, tt, 0.25, 900, 0.08, "bandpass");
+    if (i % 2 === 0) bgmNoise(c, out, tt, 0.035, 7500, i % 4 === 2 ? 0.07 : 0.035);
+    /* bass: root, octave bounce */
+    if ([0, 3, 6, 8, 11, 14].indexOf(i) >= 0) bgmVoice(c, out, midiHz(chord[0] - 12 + (i === 6 || i === 14 ? 12 : 0)), tt, st * 1.6, { type: "triangle", gain: 0.22 });
+    /* arpeggio sparkle */
+    if (!M.dark || i % 4 === 0) bgmVoice(c, out, midiHz(chord[1 + (i % 3)] + 12), tt, st * 0.9, { type: "square", gain: 0.018 });
+  }
+  /* lead melody: 8th notes from the chord, varied every other bar, resting on some steps */
+  const vary = (bar >> 1) % 2;
+  for (let k = 0; k < 8; k++) {
+    if ((k === 7 && bar % 4 === 3) || (vary && k === 3)) continue;
+    const idx = (M.mel[(k + vary * 3) % 8] + (bar % 4 === 2 && k > 4 ? 1 : 0)) % 4;
+    const n = chord[idx] + (idx === 0 ? 12 : 0) + 12;
+    bgmVoice(c, out, midiHz(n), at(k * 2), st * 1.7, { type: M.lead, gain: M.lead === "square" ? 0.045 : 0.09 });
   }
 }
 function breathStart(L) {
@@ -1697,6 +1712,16 @@ function screenOpenRooms() {
       : h("div", { class: "empty", text: "지금 열린 방이 없어요. 게임방에서 새 방을 만들어 보세요." }),
     h("button", { type: "button", class: "ghost wide", onclick: function () { go("games"); }, text: "게임방으로 가기" }));
 }
+/* how many rooms of this game are waiting / playing right now */
+function gameRoomBadges(type) {
+  const rooms = S.rooms.filter(function (r) { return roomAlive(r) && (r.type || "liar") === type; });
+  if (!rooms.length) return null;
+  const wait = rooms.filter(function (r) { return r.status === "lobby"; }).length;
+  const play = rooms.filter(function (r) { return r.status !== "lobby" && r.status !== "result"; }).length;
+  return h("span", { class: "g-badges" },
+    wait ? h("span", { class: "g-badge wait", text: "대기 중 " + wait }) : null,
+    play ? h("span", { class: "g-badge play", text: "게임 중 " + play }) : null);
+}
 function screenGames() {
   return h("section", { class: "screen" },
     h("div", { class: "sec-head" },
@@ -1706,7 +1731,9 @@ function screenGames() {
       return h("button", { class: "game" + (g.ready ? " ready" : ""), type: "button", disabled: !g.ready,
           "aria-label": g.name + (g.ready ? " 열기" : " 준비 중"), onclick: g.ready ? function () { go("game-" + g.id); } : null },
         h("span", { class: "code", text: g.code }), h("h3", { text: g.name }), h("p", { text: g.desc }),
-        h("span", { class: "status", text: g.ready ? "입장 가능" : "준비 중" }));
+        h("span", { class: "g-foot" },
+          h("span", { class: "status", text: g.ready ? "입장 가능" : "준비 중" }),
+          gameRoomBadges(g.id)));
     })));
 }
 
@@ -1778,7 +1805,16 @@ async function leaveRoom() {
   if (!me || !r) return;
   const left = (r.players || []).filter(function (p) { return p !== me.id; });
   await roomUpdate(left.length ? { players: arrayRemove(me.id) } : { players: arrayRemove(me.id), status: "closed" });
-  go("game-liar");
+  go("game-" + (r.type || "liar"));
+}
+function exitButton(r) {
+  return h("button", { type: "button", class: "exit-btn", onclick: function () {
+    const me = meMember(), inRoom = me && (r.players || []).indexOf(me.id) >= 0;
+    const playing = r.status !== "lobby" && r.status !== "result" && r.status !== "closed";
+    if (!inRoom) { go("game-" + (r.type || "liar")); return; }
+    if (playing && !window.confirm("게임이 진행 중이에요. 정말 나갈까요?")) return;
+    leaveRoom();
+  }, text: "🚪 나가기" });
 }
 async function startGame() {
   const custom = allTopics();
@@ -2613,10 +2649,26 @@ function mChat(r, ctx) {
 
 
 /* ---------- 연상퀴즈: 힌트가 하나씩 열리고, 먼저 맞힐수록 고득점 ---------- */
-const AQDUR = { clue: 60, reveal: 6 };
+const AQDUR = { clue: 40, reveal: 6 };
 if (FAST) Object.keys(AQDUR).forEach(function (k) { AQDUR[k] = Math.max(2, Math.round(AQDUR[k] / FAST)); });
 const AQ_HINTS = 5, AQ_TRIES = 3;
 const AQ = { key: null, idx: -1 };
+/* 오늘 나온 문제는 오늘 다시 안 나와요: 오늘 쓰인 방들의 기록을 모아서 빼요 */
+function todayKey() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+async function usedToday(kind) {
+  const out = [];
+  try {
+    const snap = await getDocs(query(collection(db, "rooms"), where("dayUsed.day", "==", todayKey())));
+    snap.forEach(function (d) { ((d.data().dayUsed || {})[kind] || []).forEach(function (w) { out.push(w); }); });
+  } catch (e) {}
+  return out;
+}
+function dayPatch(r, kind, add) {
+  const day = todayKey(), du = r.dayUsed && r.dayUsed.day === day ? r.dayUsed : { day: day };
+  const o = Object.assign({ day: day }, du);
+  o[kind] = (du[kind] || []).concat(add).slice(-800);
+  return o;
+}
 function aqHintMs() { return AQDUR.clue * 1000 / AQ_HINTS; }
 function aqHintIdx(r, now) {
   if (!r || r.status !== "clue") return AQ_HINTS - 1;
@@ -2624,10 +2676,11 @@ function aqHintIdx(r, now) {
   return Math.max(0, Math.min(AQ_HINTS - 1, Math.floor(((now || Date.now()) - r.phaseAt.toMillis()) / aqHintMs())));
 }
 function aqPts(idx) { return AQ_HINTS - idx; }      /* 힌트 1에서 맞히면 5점 … 힌트 5에서 1점 */
-function aqPick(used) {
-  let pool = [];
-  for (let i = 0; i < AQ_BANK.length; i++) if ((used || []).indexOf(i) < 0) pool.push(i);
-  if (!pool.length) pool = AQ_BANK.map(function (_, i) { return i; });
+function aqPick(roomUsed, today) {
+  const all = AQ_BANK.map(function (_, i) { return i; });
+  const notRoom = all.filter(function (i) { return (roomUsed || []).indexOf(AQ_BANK[i].a) < 0; });
+  let pool = notRoom.filter(function (i) { return (today || []).indexOf(AQ_BANK[i].a) < 0; });
+  if (!pool.length) pool = notRoom.length ? notRoom : all;
   return pool[Math.floor(Math.random() * pool.length)];
 }
 function aqCur(i) { const q = AQ_BANK[i]; return { i: i, a: q.a, alt: q.alt || [], h: q.h.slice(0, AQ_HINTS) }; }
@@ -2641,16 +2694,17 @@ function aqDone(rr, solved, tries) {
 }
 async function startAssoc() {
   try {
+    const today = await usedToday("aq");
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "lobby") throw { code: "phase" };
       const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 1) throw { code: "few" };
-      const qi = aqPick(r.usedQ || []);
+      const qi = aqPick([], today);
       const game = (r.game || 0) + 1;
       sysMsg(tx, { game: game }, "🧠 연상퀴즈 시작! " + (r.qcount || 5) + "문제, 힌트가 " + Math.round(aqHintMs() / 1000) + "초마다 하나씩 열려요.");
       tx.update(roomRef(), nextPhase(r, {
-        status: "clue", lineup: lineup, cur: aqCur(qi), usedQ: (r.usedQ || []).concat([qi]).slice(-60), qn: 0, total: r.qcount || 5,
+        status: "clue", lineup: lineup, cur: aqCur(qi), usedQ: [AQ_BANK[qi].a], dayUsed: dayPatch(r, "aq", [AQ_BANK[qi].a]), qn: 0, total: r.qcount || 5,
         solved: [], tries: {}, pts: {}, scores: {}, game: game, startedAt: serverTimestamp()
       }));
     });
@@ -2670,6 +2724,7 @@ async function aqToReveal(expectPhase, why) {
   });
 }
 async function aqNext(expectPhase) {
+  const today = await usedToday("aq");
   await runTransaction(db, async function (tx) {
     const snap = await tx.get(roomRef()); const r = snap.data();
     if (!r || r.status !== "reveal") return;
@@ -2680,9 +2735,9 @@ async function aqNext(expectPhase) {
       tx.update(roomRef(), nextPhase(r, { status: "result" }));
       return;
     }
-    const qi = aqPick(r.usedQ || []);
+    const qi = aqPick((r.usedQ || []).filter(function (x) { return typeof x === "string"; }), today);
     sysMsg(tx, r, "🧠 " + (next + 1) + "번째 문제!");
-    tx.update(roomRef(), nextPhase(r, { status: "clue", qn: next, cur: aqCur(qi), usedQ: (r.usedQ || []).concat([qi]).slice(-60), solved: [], tries: {}, pts: {} }));
+    tx.update(roomRef(), nextPhase(r, { status: "clue", qn: next, cur: aqCur(qi), usedQ: (r.usedQ || []).concat([AQ_BANK[qi].a]).slice(-80), dayUsed: dayPatch(r, "aq", [AQ_BANK[qi].a]), solved: [], tries: {}, pts: {} }));
   });
 }
 function assocTimeout(r) {
@@ -2693,7 +2748,7 @@ async function aqGuess(text) {
   const me = meMember(), r = S.room;
   if (!me || !r) return;
   const canGuess = r.status === "clue" && (r.lineup || []).indexOf(me.id) >= 0 && (r.solved || []).indexOf(me.id) < 0 && ((r.tries || {})[me.id] || 0) < AQ_TRIES;
-  if (!canGuess) { await sendMsg("chat", text); return; }
+  if (!canGuess) { await sendMsg("chat", r.status === "clue" && r.cur ? maskAnswer(text, [r.cur.a].concat(r.cur.alt || [])) : text); return; }
   let result = null;
   await runTransaction(db, async function (tx) {
     const snap = await tx.get(roomRef()); const rr = snap.data();
@@ -2868,8 +2923,8 @@ function aqChat(r, me) {
   let ph = "대화 보내기", enabled = true;
   if (r.status === "clue") {
     if (!isPlayer) { ph = "게임 중에는 참가자만 입력할 수 있어요"; enabled = false; }
-    else if (done) { ph = "정답! 다음 문제를 기다려요"; enabled = false; }
-    else if (used >= AQ_TRIES) { ph = "이번 문제 기회를 다 썼어요"; enabled = false; }
+    else if (done) ph = "맞힌 사람도 수다 OK (정답은 자동으로 가려져요)";
+    else if (used >= AQ_TRIES) ph = "기회는 다 썼지만 수다는 OK";
     else ph = "정답 입력 (기회 " + (AQ_TRIES - used) + "번)";
   }
   const log = h("div", { class: "log", role: "log", "aria-live": "polite" },
@@ -2881,7 +2936,8 @@ function aqChat(r, me) {
         h("div", { class: "b-text", text: m.text }));
     }) : h("div", { class: "msg-sys", text: "아직 대화가 없어요." }));
   const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "60", placeholder: ph, autocomplete: "off", disabled: !enabled });
-  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm" + (r.status === "clue" && enabled ? " go" : ""), disabled: !enabled, text: r.status === "clue" ? "제출" : "보내기" }));
+  const guessing = r.status === "clue" && enabled && !done && used < AQ_TRIES;
+  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm" + (guessing ? " go" : ""), disabled: !enabled, text: guessing ? "제출" : "보내기" }));
   f.addEventListener("submit", async function (ev) {
     ev.preventDefault();
     const t = inp.value.trim(); if (!t || !S.user || !enabled) return;
@@ -2919,13 +2975,14 @@ function skCrewWords() {
   (S.sketchNames || SK_DEFAULT_NAMES).forEach(add);
   return out;
 }
-function skPickWord(mode, used) {
+function skPickWord(mode, used, today) {
   const crew = skCrewWords(), general = SK_WORDS;
   /* rare: about one drawing in ten, and at most once per game */
   const already = (used || []).some(function (w) { return crew.indexOf(w) >= 0; });
   const pool = crew.length && !already && Math.random() < SK_SURPRISE ? crew : general;
-  let fresh = pool.filter(function (w) { return (used || []).indexOf(w) < 0; });
-  if (!fresh.length) fresh = pool;
+  const notRoom = pool.filter(function (w) { return (used || []).indexOf(w) < 0; });
+  let fresh = notRoom.filter(function (w) { return (today || []).indexOf(w) < 0; });
+  if (!fresh.length) fresh = notRoom.length ? notRoom : pool;
   return fresh[Math.floor(Math.random() * fresh.length)];
 }
 function skAnswers(word) {
@@ -2936,10 +2993,10 @@ function skAnswers(word) {
 function skMatches(text, word) { return skAnswers(word).indexOf(normWord(text)) >= 0; }
 const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
 function skHint(word, showCho) {
-  return Array.from(word || "").map(function (ch) {
+  return Array.from(word || "").map(function (ch, i) {
     const c = ch.charCodeAt(0);
     if (ch === " ") return " ";
-    if (c >= 0xAC00 && c <= 0xD7A3) return showCho ? CHO.charAt(Math.floor((c - 0xAC00) / 588)) : "○";
+    if (c >= 0xAC00 && c <= 0xD7A3) return showCho && (showCho === 2 || i === 0 || showCho === true) ? CHO.charAt(Math.floor((c - 0xAC00) / 588)) : "○";
     if (/[()]/.test(ch)) return ch;
     return "○";
   }).join("");
@@ -2974,6 +3031,7 @@ function skTurnKey(r) { return (r.game || 0) * 1000 + (r.turn || 0); }
 
 async function startSketch() {
   try {
+    const today = await usedToday("sk");
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "lobby") throw { code: "phase" };
@@ -2981,12 +3039,12 @@ async function startSketch() {
       if (lineup.length < 2) throw { code: "few" };
       const order = lineup.slice();
       for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
-      const word = skPickWord(r.wordMode || "mix", []);
+      const word = skPickWord(r.wordMode || "mix", [], today);
       const game = (r.game || 0) + 1;
       sysMsg(tx, { game: game }, "🎨 드로잉퀴즈 시작! 첫 번째 화가는 " + nickOf(order[0]) + "님이에요.");
       tx.update(roomRef(), nextPhase(r, {
         status: "draw", lineup: lineup, order: order, turn: 0, word: word, used: [word], guessed: [], scores: {},
-        skipUsed: false, game: game, startedAt: serverTimestamp(), rounds: skRounds(r), stars: {}, starGiven: []
+        skipUsed: false, game: game, startedAt: serverTimestamp(), rounds: skRounds(r), stars: {}, starGiven: [], dayUsed: dayPatch(r, "sk", [word])
       }));
     });
   } catch (e) {
@@ -3005,6 +3063,7 @@ async function skToReveal(expectPhase, why) {
   });
 }
 async function skNextTurn(expectPhase) {
+  const today = await usedToday("sk");
   await runTransaction(db, async function (tx) {
     const snap = await tx.get(roomRef()); const r = snap.data();
     if (!r || r.status !== "reveal") return;
@@ -3015,10 +3074,10 @@ async function skNextTurn(expectPhase) {
       tx.update(roomRef(), nextPhase(r, { status: "result" }));
       return;
     }
-    const word = skPickWord(r.wordMode || "mix", r.used || []);
+    const word = skPickWord(r.wordMode || "mix", r.used || [], today);
     const drawer = r.order[next % r.order.length];
     sysMsg(tx, r, "🎨 " + (next + 1) + "번째 그림 · 화가는 " + nickOf(drawer) + "님");
-    tx.update(roomRef(), nextPhase(r, { status: "draw", turn: next, word: word, used: (r.used || []).concat([word]), guessed: [], skipUsed: false }));
+    tx.update(roomRef(), nextPhase(r, { status: "draw", turn: next, word: word, used: (r.used || []).concat([word]), dayUsed: dayPatch(r, "sk", [word]), guessed: [], skipUsed: false }));
   });
 }
 function sketchTimeout(r) {
@@ -3028,11 +3087,12 @@ function sketchTimeout(r) {
 async function skSkipWord() {
   const me = meMember(); if (!me) return;
   try {
+    const today = await usedToday("sk");
     await runTransaction(db, async function (tx) {
       const snap = await tx.get(roomRef()); const r = snap.data();
       if (!r || r.status !== "draw" || skDrawer(r) !== me.id || r.skipUsed || (r.guessed || []).length) throw { code: "no" };
-      const word = skPickWord(r.wordMode || "mix", (r.used || []).concat([r.word]));
-      tx.update(roomRef(), { word: word, used: (r.used || []).concat([word]), skipUsed: true });
+      const word = skPickWord(r.wordMode || "mix", (r.used || []).concat([r.word]), today);
+      tx.update(roomRef(), { word: word, used: (r.used || []).concat([word]), dayUsed: dayPatch(r, "sk", [word]), skipUsed: true });
     });
     await skClear();
   } catch (e) { toast(e && e.code === "no" ? "단어는 한 번만 바꿀 수 있어요." : errText(e)); }
@@ -3060,8 +3120,14 @@ async function skGuess(text) {
     });
   } else {
     sfx("click");
-    await sendMsg("chat", text);
+    await sendMsg("chat", r.status === "draw" ? maskAnswer(text, skAnswers(r.word)) : text);
   }
+}
+/* chat from someone who already knows the answer: hide the answer so nobody gets a free point */
+function maskAnswer(text, answers) {
+  const t = normWord(text);
+  const hit = (answers || []).some(function (a) { a = normWord(a); return a && t.indexOf(a) >= 0; });
+  return hit ? "🤐 (정답이 들어 있어서 가렸어요)" : text;
 }
 
 /* canvas: one persistent element, strokes synced through rooms/{id}/strokes */
@@ -3285,7 +3351,7 @@ function screenSketchLobby() {
           h("li", { text: "화가는 60초 동안 그려요. 글자나 숫자를 쓰면 반칙이에요. 단어가 너무 어려우면 한 번 바꿀 수 있어요." }),
           h("li", { text: "나머지는 대화창에 정답을 입력해요. 틀린 답은 모두에게 보이고, 맞힌 답은 숨겨져요." }),
           h("li", { text: "먼저 맞힌 순서대로 3점, 2점, 1점. 화가는 맞힌 사람 한 명당 1점을 받아요." }),
-          h("li", { text: "시간이 반쯤 지나면 정답의 초성 힌트가 나와요." })))),
+          h("li", { text: "40초가 지나면 첫 글자 초성, 마지막 10초에는 모든 초성이 힌트로 나와요." })))),
     isBoss() ? skNamesPanel() : null);
 }
 function skNamesPanel() {
@@ -3346,7 +3412,12 @@ function screenSketchRoom(r) {
   if (r.status === "lobby") body = skLobbyPanel(r, me, inRoom, players);
   else if (r.status === "result") body = skResultPanel(r);
   else {
-    const half = r.status === "draw" && phaseEnd(r) != null && phaseEnd(r) - Date.now() < SDUR.draw * 500;
+    const leftMs = r.status === "draw" && phaseEnd(r) != null ? phaseEnd(r) - Date.now() : Infinity;
+    /* harder: first consonant only after 2/3 of the time, all consonants for the last 10 seconds */
+    const t1 = SDUR.draw * 1000 / 3, t2 = Math.min(10000, SDUR.draw * 1000 / 6);
+    const half = leftMs < t1 ? (leftMs < t2 ? 2 : 1) : 0;
+    clearTimeout(SK.hintT);
+    if (leftMs !== Infinity && leftMs > t2) SK.hintT = setTimeout(render, (leftMs > t1 ? leftMs - t1 : leftMs - t2) + 80);
     const info = r.status === "reveal"
       ? h("div", { class: "panel turn sk-info" }, timerEl(r, "정답 공개 · 다음 그림까지"),
           h("p", { class: "sk-answer" }, "정답 ", h("b", { text: r.word })),
@@ -3357,7 +3428,7 @@ function screenSketchRoom(r) {
               !r.skipUsed && !guessed.length ? h("button", { type: "button", class: "link-btn", onclick: skSkipWord, text: "단어 바꾸기(1번)" }) : null))
         : h("div", { class: "panel turn sk-info" }, timerEl(r, "화가 " + nickOf(drawer) + " · 남은 시간"),
             h("p", { class: "sk-answer" }, "힌트 ", h("b", { class: "sk-hint", text: skHint(r.word, half) }),
-              h("small", { text: me && guessed.indexOf(me.id) >= 0 ? " 정답! 기다리는 중" : half ? " 초성 공개" : " " + Array.from(r.word || "").length + "글자" })));
+              h("small", { text: me && guessed.indexOf(me.id) >= 0 ? " 정답! 기다리는 중" : half === 2 ? " 초성 공개" : half ? " 첫 글자 초성 공개" : " " + Array.from(r.word || "").length + "글자" })));
     const said = skSaid(r);
     const left = [], right = [];
     lineup.forEach(function (p, i) { (i % 2 ? right : left).push(skAvatar(p, i % 2 ? "r" : "l", r, said)); });
@@ -3522,7 +3593,7 @@ function skChat(r, me, iDraw) {
   if (r.status === "draw") {
     if (iDraw) { ph = "화가는 그림으로만 말해요"; enabled = false; }
     else if (!isPlayer) { ph = "게임 중에는 참가자만 입력할 수 있어요"; enabled = false; }
-    else if (done) { ph = "정답을 맞혔어요! 다음 그림을 기다려요"; enabled = false; }
+    else if (done) ph = "맞힌 사람도 수다 OK (정답은 자동으로 가려져요)";
     else ph = "정답 입력";
   }
   const log = h("div", { class: "log", role: "log", "aria-live": "polite" },
@@ -3533,7 +3604,8 @@ function skChat(r, me, iDraw) {
         h("div", { class: "b-meta" }, h("b", { text: m.nick || "손님" })), h("div", { class: "b-text", text: m.text }));
     }) : h("div", { class: "msg-sys", text: "아직 대화가 없어요." }));
   const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "60", placeholder: ph, autocomplete: "off", disabled: !enabled });
-  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm" + (r.status === "draw" && enabled ? " go" : ""), disabled: !enabled, text: r.status === "draw" ? "제출" : "보내기" }));
+  const guessing = r.status === "draw" && enabled && !done;
+  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm" + (guessing ? " go" : ""), disabled: !enabled, text: guessing ? "제출" : "보내기" }));
   f.addEventListener("submit", async function (ev) {
     ev.preventDefault();
     const t = inp.value.trim(); if (!t || !S.user || !enabled) return;
@@ -4173,6 +4245,10 @@ function draw() {
 
   const gate = S.membersReady && needsGate();
   tabbar.hidden = gate;
+  if (view.classList && view.classList.contains("room") && S.room) {
+    const rh = view.querySelector(".room-head");
+    if (rh && !rh.querySelector(".exit-btn")) rh.insertBefore(exitButton(S.room), rh.firstChild);
+  }
   if (view.classList && view.classList.contains("room")) {
     const dock = Array.prototype.find.call(view.children, function (c) { return c.classList.contains("dock"); });
     if (dock) {

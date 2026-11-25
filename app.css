@@ -989,3 +989,18 @@ img { max-width: 100%; }
   body.wide-room .sk-canvas-wrap { width: min(100%, calc(100vh - 400px)); }
   body.wide-room .sk-canvas-wrap .sk-canvas { width: 100%; }
 }
+/* easy-to-find leave button in every game room */
+.exit-btn { order: 3; margin-left: auto; min-height: 36px; padding: 6px 12px; border-radius: 3px; border: 1px solid var(--red); background: var(--red-soft);
+  color: var(--fg); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.exit-btn:active { transform: scale(0.96); }
+.room-head { align-items: center; }
+.room-head > div { order: 1; }
+.room-head .mode-chip { order: 2; }
+/* game cards: live room status next to 입장 가능 */
+.g-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; }
+.g-badges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.g-badge { font: 700 11px var(--font-mono); padding: 2px 6px; border-radius: 2px; white-space: nowrap; }
+.g-badge.wait { color: #6fd39a; border: 1px solid rgba(63, 168, 107, 0.6); background: rgba(63, 168, 107, 0.12); }
+.g-badge.play { color: #ff8a80; border: 1px solid var(--red); background: var(--red-soft); animation: g-pulse 1.6s ease-in-out infinite; }
+@keyframes g-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .g-badge.play { animation: none; } }
