@@ -244,10 +244,14 @@ const SFX = {
   correct: function () { tone(1047, 0.18, { type: "triangle", gain: 0.14 }); tone(784, 0.35, { type: "triangle", gain: 0.14, at: 0.16 }); },
   timeup: function () { tone(440, 0.45, { type: "square", gain: 0.06 }); },
   pop: function () { tone(620, 0.06, { gain: 0.05, to: 900 }); },
+  /* "탕!": sharp crack + punchy body + low thump + a short echo */
   bang: function () {
-    hiss(0.35, { filter: "highpass", f: 900, gain: 0.5, q: 0.5 });
-    tone(110, 0.4, { gain: 0.4, to: 40 });
-    hiss(0.9, { filter: "lowpass", f: 600, gain: 0.12, at: 0.05 });
+    hiss(0.05, { filter: "highpass", f: 3000, gain: 0.9, q: 0.7, attack: 0.001 });
+    hiss(0.18, { filter: "bandpass", f: 1500, q: 0.6, gain: 0.55, attack: 0.001 });
+    hiss(0.3, { filter: "lowpass", f: 900, gain: 0.45, attack: 0.002 });
+    tone(140, 0.28, { gain: 0.55, to: 38 });
+    hiss(0.7, { filter: "bandpass", f: 650, fTo: 300, q: 0.8, gain: 0.09, at: 0.12, attack: 0.02 });
+    hiss(0.5, { filter: "bandpass", f: 500, fTo: 250, q: 0.8, gain: 0.05, at: 0.32, attack: 0.02 });
   },
   cough: function () {
     /* 콜록… 콜록… 콜록… for the whole cough */
@@ -275,6 +279,22 @@ const SFX = {
   relief: function () { hiss(0.9, { filter: "lowpass", f: 900, fTo: 300, gain: 0.12, attack: 0.08 }); tone(523, 0.5, { type: "triangle", gain: 0.07, at: 0.35 }); tone(659, 0.7, { type: "triangle", gain: 0.07, at: 0.6 }); },
   flip: function () { hiss(0.12, { filter: "bandpass", f: 1800, fTo: 4200, q: 1, gain: 0.25 }); },
   ominous: function () { [110, 131, 156].forEach(function (f) { tone(f, 2.0, { type: "sawtooth", gain: 0.06 }); }); tone(55, 2.2, { gain: 0.2 }); },
+  /* "음하하하하": falling square-wave bursts */
+  laugh: function () {
+    tone(196, 0.32, { type: "sawtooth", gain: 0.07, to: 175 });
+    [0, 1, 2, 3, 4].forEach(function (i) {
+      const a = 0.36 + i * 0.17, f = 330 - i * 18;
+      tone(f, 0.12, { type: "square", gain: 0.08, at: a, to: f * 0.82 });
+      hiss(0.08, { filter: "bandpass", f: 1400, q: 1, gain: 0.08, at: a });
+    });
+  },
+  /* "엉엉": wobbly sliding sobs */
+  cry: function () {
+    [0, 0.55, 1.15].forEach(function (a, i) {
+      tone(i % 2 ? 392 : 440, 0.45, { type: "triangle", gain: 0.07, at: a, to: i % 2 ? 300 : 330 });
+      tone(i % 2 ? 398 : 446, 0.45, { type: "sine", gain: 0.04, at: a + 0.02, to: i % 2 ? 296 : 326 });
+    });
+  },
   sly: function () { [659, 587, 659, 523].forEach(function (f, i) { tone(f, 0.18, { type: "square", gain: 0.06, at: i * 0.16 }); }); },
   eerie: function () {
     const c = ac(); if (!c) return;
@@ -454,16 +474,16 @@ function sfxRoom(a, b) {
     if ((b.guessed || []).length > (a.guessed || []).length) sfx("correct");
     else if (st && b.status === "reveal") sfx("timeup");
     if (b.status === "draw" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) later("ding", 300);
-    if (st && b.status === "result") later("fanfare", 400);
+    if (st && b.status === "result") { later("fanfare", 400); later("laugh", 1700); later("cry", 2700); }
   } else if (b.type === "assoc") {
     if ((b.solved || []).length > (a.solved || []).length) sfx("correct");
     else if (st && b.status === "reveal") sfx("timeup");
     if (b.status === "clue" && (st || a.qn !== b.qn)) later("ding", 250);
-    if (st && b.status === "result") later("fanfare", 400);
+    if (st && b.status === "result") { later("fanfare", 400); later("laugh", 1700); later("cry", 2700); }
   } else if (b.type === "smoke") {
     if (st && b.status === "play") sfx("go");
-    else if (st && b.status === "shot") sfx("bang");
-    else if (st && b.status === "result") { sfx("bang"); later("fanfare", 700); }
+    else if (st && b.status === "shot") { sfx("cock"); later("bang", 320); }
+    else if (st && b.status === "result") { sfx("bang"); later("fanfare", 700); later("laugh", 2000); later("cry", 3000); }
   } else {
     if (st && b.status === "hint" && a.status === "lobby") sfx("flip");
     if (b.status === "hint" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) later("ding", st ? 350 : 0);
@@ -2675,7 +2695,9 @@ function aqHintIdx(r, now) {
   if (!r.phaseAt || !r.phaseAt.toMillis) return 0;
   return Math.max(0, Math.min(AQ_HINTS - 1, Math.floor(((now || Date.now()) - r.phaseAt.toMillis()) / aqHintMs())));
 }
-function aqPts(idx) { return AQ_HINTS - idx; }      /* 힌트 1에서 맞히면 5점 … 힌트 5에서 1점 */
+function aqPts(idx) { return [10, 8, 6, 4, 2][idx] || 2; }      /* 힌트 1개: 10점 … 5개: 2점 */
+const AQ_RANK = [5, 3, 1];                                      /* 1등 +5, 2등 +3, 3등 +1 */
+function aqRankBonus(n) { return AQ_RANK[n] || 0; }
 function aqPick(roomUsed, today) {
   const all = AQ_BANK.map(function (_, i) { return i; });
   const notRoom = all.filter(function (i) { return (roomUsed || []).indexOf(AQ_BANK[i].a) < 0; });
@@ -2756,12 +2778,12 @@ async function aqGuess(text) {
     const solved = (rr.solved || []).slice(), tries = Object.assign({}, rr.tries || {});
     if (solved.indexOf(me.id) >= 0 || (tries[me.id] || 0) >= AQ_TRIES) throw { code: "used" };
     if (aqMatch(text, rr.cur)) {
-      const idx = aqHintIdx(rr), first = solved.length === 0;
-      const pts = aqPts(idx) + (first ? 1 : 0);
+      const idx = aqHintIdx(rr);
+      const bonus = aqRankBonus(solved.length), pts = aqPts(idx) + bonus;
       const scores = Object.assign({}, rr.scores || {}), got = Object.assign({}, rr.pts || {});
       scores[me.id] = (scores[me.id] || 0) + pts; got[me.id] = pts;
       solved.push(me.id);
-      sysMsg(tx, rr, "🎯 " + me.nick + "님 정답! 힌트 " + (idx + 1) + "개 보고 맞혔어요 (+" + pts + "점" + (first ? ", 1등 보너스 포함" : "") + ")");
+      sysMsg(tx, rr, "🎯 " + me.nick + "님 정답! 힌트 " + (idx + 1) + "개 보고 " + (solved.length + 1) + "등으로 맞혔어요 (+" + pts + "점" + (bonus ? ", 순위 보너스 " + bonus + "점 포함" : "") + ")");
       const patch = { solved: solved, scores: scores, pts: got };
       if (aqDone(rr, solved, tries)) { sysMsg(tx, rr, "다 끝났어요! 정답은 ‘" + rr.cur.a + "’"); Object.assign(patch, nextPhase(rr, { status: "reveal" })); }
       tx.update(roomRef(), patch);
@@ -2824,7 +2846,8 @@ function screenAssocLobby() {
         h("ol", null,
           h("li", { text: "문제마다 정답 글자 수가 네모 칸으로 보여요." }),
           h("li", { text: "힌트는 " + sec + "초마다 하나씩, 모두 " + AQ_HINTS + "개 열려요. 앞쪽 힌트일수록 일부러 헷갈리게 만들었어요." }),
-          h("li", { text: "대화창에 정답을 입력해요. 힌트 1개 보고 맞히면 5점, 2개 4점 … 5개 다 보고 맞히면 1점이에요. 제일 먼저 맞힌 사람은 1점 더!" }),
+          h("li", { text: "대화창에 정답을 입력해요. 힌트 1개 보고 맞히면 10점, 2개 8점, 3개 6점, 4개 4점, 5개 2점이에요." }),
+          h("li", { text: "맞힌 순서 보너스: 1등 +5점, 2등 +3점, 3등 +1점. 빨리 맞힐수록 점수 차이가 확 벌어져요!" }),
           h("li", { text: "한 문제에 기회는 " + AQ_TRIES + "번. 틀린 답은 말풍선으로 모두에게 보여요. 맞힌 답은 숨겨져요." }),
           h("li", { text: "모두 맞히거나 기회를 다 쓰면 바로 정답이 공개되고 다음 문제로 넘어가요." })))));
 }
@@ -2849,7 +2872,7 @@ function aqResultPanel(r) {
   const rank = (r.lineup || []).slice().sort(function (a, b) { return (scores[b] || 0) - (scores[a] || 0); });
   const medal = ["🥇", "🥈", "🥉"];
   return h("div", { class: "answer team" },
-    h("div", { class: "result-title", text: nickOf(rank[0]) + " 우승!" }),
+    ceremony(rank[0], rank.slice(1), "연상퀴즈 우승 · " + (scores[rank[0]] || 0) + "점"),
     h("ul", { class: "role-list" }, rank.map(function (p, i) {
       return h("li", null, h("span", { text: (medal[i] || (i + 1) + "등") + " " + nickOf(p) }), h("b", { text: (scores[p] || 0) + "점" }));
     })),
@@ -2888,7 +2911,7 @@ function screenAssocRoom(r) {
     let status = "";
     if (reveal) status = solved.length ? "맞힌 사람: " + solved.map(function (p) { return nickOf(p) + " +" + ((r.pts || {})[p] || 0); }).join(", ") : "아무도 못 맞혔어요.";
     else if (iSolved) status = "정답! +" + ((r.pts || {})[me.id] || 0) + "점 · 다른 사람을 기다리는 중";
-    else if (isPlayer) status = myTries >= AQ_TRIES ? "기회를 다 썼어요. 다음 문제를 기다려요." : "남은 기회 " + "●".repeat(AQ_TRIES - myTries) + "○".repeat(myTries) + " · 지금 맞히면 " + aqPts(idx) + "점" + (solved.length ? "" : " (+1등 보너스)");
+    else if (isPlayer) status = myTries >= AQ_TRIES ? "기회를 다 썼어요. 다음 문제를 기다려요." : "남은 기회 " + "●".repeat(AQ_TRIES - myTries) + "○".repeat(myTries) + " · 지금 맞히면 " + (aqPts(idx) + aqRankBonus(solved.length)) + "점" + (aqRankBonus(solved.length) ? " (" + (solved.length + 1) + "등 보너스 포함)" : "");
     else status = "관전 중";
     const info = h("div", { class: "panel turn aq-info" + (reveal ? " reveal" : "") },
       timerEl(r, reveal ? "정답 공개 · 다음 문제까지" : "남은 시간"),
@@ -3107,12 +3130,12 @@ async function skGuess(text) {
       if (!rr || rr.status !== "draw" || rr.turn !== r.turn || rr.game !== r.game) throw { code: "late" };
       const g = rr.guessed || [];
       if (g.indexOf(me.id) >= 0) return;
-      const pts = g.length === 0 ? 3 : g.length === 1 ? 2 : 1;
+      const pts = [10, 7, 5][g.length] || 3;
       const dr = skDrawer(rr), scores = Object.assign({}, rr.scores || {});
       scores[me.id] = (scores[me.id] || 0) + pts;
-      scores[dr] = (scores[dr] || 0) + 1;
+      scores[dr] = (scores[dr] || 0) + 2;
       const ng = g.concat([me.id]);
-      sysMsg(tx, rr, "🎯 " + me.nick + "님 정답! (+" + pts + "점)");
+      sysMsg(tx, rr, "🎯 " + me.nick + "님 " + (g.length + 1) + "등으로 정답! (+" + pts + "점)");
       if (ng.length >= rr.lineup.length - 1) {
         sysMsg(tx, rr, "모두 맞혔어요! 정답은 ‘" + rr.word + "’");
         tx.update(roomRef(), nextPhase(rr, { guessed: ng, scores: scores, status: "reveal" }));
@@ -3350,7 +3373,7 @@ function screenSketchLobby() {
           h("li", { text: "참가자가 돌아가면서 한 번씩 화가가 돼요. 화가에게만 제시어가 보여요." }),
           h("li", { text: "화가는 60초 동안 그려요. 글자나 숫자를 쓰면 반칙이에요. 단어가 너무 어려우면 한 번 바꿀 수 있어요." }),
           h("li", { text: "나머지는 대화창에 정답을 입력해요. 틀린 답은 모두에게 보이고, 맞힌 답은 숨겨져요." }),
-          h("li", { text: "먼저 맞힌 순서대로 3점, 2점, 1점. 화가는 맞힌 사람 한 명당 1점을 받아요." }),
+          h("li", { text: "맞힌 순서대로 1등 10점, 2등 7점, 3등 5점, 그다음부터 3점. 화가는 맞힌 사람 한 명당 2점을 받아요." }),
           h("li", { text: "40초가 지나면 첫 글자 초성, 마지막 10초에는 모든 초성이 힌트로 나와요." })))),
     isBoss() ? skNamesPanel() : null);
 }
@@ -3575,7 +3598,7 @@ function skResultPanel(r) {
   const medal = ["🥇", "🥈", "🥉"];
   const starTop = (r.lineup || []).slice().sort(function (a, b) { return (stars[b] || 0) - (stars[a] || 0); })[0];
   return h("div", { class: "answer team" },
-    h("div", { class: "result-title", text: nickOf(rank[0]) + " 우승!" }),
+    ceremony(rank[0], rank.slice(1), "드로잉퀴즈 우승 · " + (scores[rank[0]] || 0) + "점"),
     starTop && stars[starTop] ? h("p", { class: "sk-star-award", text: "⭐ 인기 화가상: " + nickOf(starTop) + " (별 " + stars[starTop] + "개)" }) : null,
     h("ul", { class: "role-list" }, rank.map(function (p, i) {
       return h("li", null, h("span", { text: (medal[i] || (i + 1) + "등") + " " + nickOf(p) }), h("b", { text: (scores[p] || 0) + "점" + (stars[p] ? " · ⭐" + stars[p] : "") }));
@@ -3922,26 +3945,39 @@ function screenSmokeRoom(r) {
     const loser = findMember(r.shot) || { nick: nickOf(r.shot) };
     body = h("div", { class: "panel shot" },
       h("div", { class: "shot-scene" },
-        h("div", { class: "killer", "aria-hidden": "true", text: "🕴️🔫" }),
-        h("div", { class: "victim" }, h("div", { class: "v-photo" }, photoBox(loser)), h("span", { class: "bang", text: "탕!" }))),
+        h("div", { class: "killer", "aria-hidden": "true" },
+          h("span", { class: "k-man", text: "🕴️" }), h("span", { class: "k-gun", text: "🔫" }), h("span", { class: "k-flash", text: "💥" })),
+        h("span", { class: "bullet", "aria-hidden": "true" }),
+        h("div", { class: "victim" }, h("span", { class: "bang", text: "탕!" }), h("div", { class: "v-photo" }, photoBox(loser)))),
       h("p", { class: "shot-line" }, "킬러: “" + (r.line || KILLER_LINES[0]) + "”"),
       h("p", null, h("b", { text: loser.nick }), "님 탈락."),
       smBoard(r), timerEl(r, "다음 라운드까지"));
   } else {
     const w = findMember(r.winner) || { nick: nickOf(r.winner) };
     body = h("div", { class: "panel result-smoke" },
-      h("div", { class: "winner" }, h("span", { class: "crown", "aria-hidden": "true", text: "👑" }), h("div", { class: "w-photo" }, photoBox(w)),
-        h("div", { class: "w-name", text: w.nick }), h("div", { class: "eyebrow", text: "최후의 1인 · 오늘의 형님" })),
-      h("div", { class: "kneel" }, (r.out || []).slice().reverse().map(function (m) {
-        const mm = findMember(m) || { nick: nickOf(m) };
-        return h("div", { class: "kn" }, h("span", { class: "kn-say", text: "형님…" }), h("div", { class: "kn-photo" }, photoBox(mm)),
-          h("span", { class: "kn-name", text: "🙇 " + mm.nick }));
-      })),
+      ceremony(r.winner, (r.out || []).slice().reverse(), "최후의 1인 · 오늘의 형님"),
       h("div", { class: "op-row" },
         h("button", { type: "button", onclick: function () { go("game-smoke"); }, text: "방 목록" }),
         h("button", { type: "button", class: "go", onclick: backToLobby, text: "같은 방에서 한 판 더" })));
   }
   return h("section", { class: "screen room" }, back, head, body, smChat(r, me));
+}
+/* ending: the winner laughs, everyone else kneels and cries */
+const CRY_LINES = ["엉엉 😭", "형님… 😭", "흑흑 😢", "으앙 😭", "억울해 😭", "다음엔 꼭… 😢"];
+function ceremony(winnerId, others, title, extra) {
+  const w = findMember(winnerId) || { nick: nickOf(winnerId) };
+  return h("div", { class: "ceremony" },
+    h("div", { class: "winner laughing" },
+      h("span", { class: "w-say", text: "음하하하하! 😆" }),
+      h("span", { class: "crown", "aria-hidden": "true", text: "👑" }), h("div", { class: "w-photo" }, photoBox(w)),
+      h("div", { class: "w-name", text: w.nick }), h("div", { class: "eyebrow", text: title || "오늘의 형님" }), extra || null),
+    others.length ? h("div", { class: "kneel" }, others.map(function (m, i) {
+      const mm = findMember(m) || { nick: nickOf(m) };
+      return h("div", { class: "kn crying" },
+        h("span", { class: "kn-say", text: CRY_LINES[i % CRY_LINES.length] }),
+        h("div", { class: "kn-photo" }, photoBox(mm), h("span", { class: "tear l" }), h("span", { class: "tear r" })),
+        h("span", { class: "kn-name", text: "🧎 " + mm.nick }));
+    })) : null);
 }
 function smBoard(r) {
   return h("ol", { class: "sm-board" }, (r.board || []).map(function (x) {
