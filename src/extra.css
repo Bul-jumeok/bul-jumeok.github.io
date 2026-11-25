@@ -409,3 +409,100 @@ img { max-width: 100%; }
 .install-icon { width: 48px; height: 48px; border-radius: 12px; flex: none; border: 1px solid var(--line); }
 .install details.guide { border-color: var(--line); background: transparent; }
 .install .note { margin: 0; }
+.install-help { display: grid; gap: 16px; }
+.install-help ol { margin: 0; padding-left: 22px; display: grid; gap: 10px; font-size: 16px; line-height: 1.5; }
+
+/* ---------- characters with speech bubbles above their heads ---------- */
+.stage { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 8px; padding: 40px 0 4px; }
+.st-av { position: relative; width: 58px; display: grid; justify-items: center; gap: 1px; text-align: center; }
+.st-ph { position: relative; width: 44px; height: 44px; background: var(--raised); border: 1px solid var(--line); }
+.st-ph .ph, .st-ph .nophoto { overflow: hidden; }
+.st-ph .nophoto .np-stamp { font-size: 7px; border-width: 1px; padding: 1px; }
+.st-ph .nophoto em { display: none; }
+.st-name { font-size: 11px; color: var(--muted); max-width: 58px; overflow-wrap: anywhere; line-height: 1.2; }
+.st-sub { font: 600 10px var(--font-mono); color: var(--faint); }
+.st-av.me .st-name { color: var(--fg); font-weight: 700; }
+.st-av.now .st-ph { border-color: var(--red); box-shadow: 0 0 0 2px var(--red-soft); }
+.st-av.ok .st-ph { border-color: #3fa86b; }
+.st-av.out, .st-av.dead { opacity: 0.45; }
+.st-av.dead .st-ph { filter: grayscale(1); }
+.st-say { --dx: 0px; position: absolute; left: 50%; bottom: calc(100% - 2px); z-index: 4; transform: translateX(calc(-50% + var(--dx)));
+  width: max-content; max-width: 150px; padding: 5px 9px; border-radius: 10px; background: #f3f1ec; color: #111;
+  font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; box-shadow: 0 2px 8px rgba(0,0,0,0.45); animation: say-in 0.18s ease-out; }
+.st-say::after { content: ""; position: absolute; top: 100%; left: calc(50% - var(--dx)); margin-left: -5px;
+  border: 5px solid transparent; border-top-color: #f3f1ec; }
+.st-say.wrong { background: #3a1d1c; color: #ffb4ad; }
+.st-say.wrong::after { border-top-color: #3a1d1c; }
+.st-say.hint { background: #f6e7a8; }
+.st-say.hint::after { border-top-color: #f6e7a8; }
+@keyframes say-in { from { opacity: 0; transform: translateX(calc(-50% + var(--dx))) translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .st-say { animation: none; } }
+
+/* ---------- association quiz ---------- */
+.aq-info { gap: 8px; padding: 10px 12px; }
+.aq-info .t-num { font-size: 18px; }
+.aq-len { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.aq-len > b { font: 600 13px var(--font-mono); color: var(--red); }
+.aq-slots { display: flex; gap: 5px; flex-wrap: wrap; }
+.aq-slot { width: 34px; height: 38px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--bg);
+  font-family: var(--font-display); font-size: 22px; color: var(--fg); }
+.aq-slot.open { border-color: #3fa86b; background: rgba(63, 168, 107, 0.12); }
+.aq-status { margin: 0; font-size: 13px; color: var(--muted); }
+.aq-status.ok { color: #6fd39a; font-weight: 700; }
+.aq-hints { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.aq-hints li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 10px;
+  border: 1px solid var(--line); background: var(--surface); }
+.aq-hints li.locked { background: transparent; border-style: dashed; }
+.aq-hints li.locked .aq-txt { color: var(--faint); font-size: 12px; }
+.aq-hints li.new { border-color: var(--red); background: linear-gradient(90deg, var(--red-soft), var(--surface)); }
+.aq-no { font: 600 11px var(--font-mono); color: var(--red); }
+.aq-txt { font-size: 15px; color: var(--fg); line-height: 1.35; }
+.aq-pt { font: 600 11px var(--font-mono); color: var(--faint); }
+.bubble.wrong .b-text { color: #ff9d94; text-decoration: line-through; text-decoration-color: rgba(255, 157, 148, 0.5); }
+
+/* ---------- computer: game on the left, chat on the right ---------- */
+.room-main { display: contents; }
+@media (min-width: 960px) {
+  body.wide-room .wrap { max-width: 1200px; }
+  body.wide-room .screen.room.split { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); column-gap: 28px; align-items: start; }
+  body.wide-room .room-main { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  body.wide-room .room .dock { position: sticky; top: 64px; bottom: auto; align-self: start;
+    height: calc(100vh - 64px - var(--nav-h) - 28px); display: flex; flex-direction: column; gap: 8px;
+    padding: 12px; border: 1px solid var(--line); background: var(--surface); box-shadow: none; }
+  body.wide-room .room .dock .field-label { font-size: 12px; display: flex; }
+  body.wide-room .room .dock .log, body.wide-room .room .dock.sk .log, body.wide-room .room .dock.slim .log {
+    display: flex; flex-direction: column; flex: 1; min-height: 0; max-height: none; }
+  body.wide-room .room .dock .b-text { font-size: 15px; }
+  body.wide-room .room .dock .send-row { flex: none; }
+  /* bigger characters */
+  body.wide-room .stage { gap: 14px 14px; padding-top: 46px; }
+  body.wide-room .st-av { width: 78px; }
+  body.wide-room .st-ph { width: 64px; height: 64px; }
+  body.wide-room .st-name { font-size: 13px; max-width: 78px; }
+  body.wide-room .st-say { font-size: 14px; max-width: 200px; }
+  /* drawing quiz: canvas fits the window height, wider side columns */
+  body.wide-room .sk-arena { grid-template-columns: 96px minmax(0, 1fr) 96px; gap: 12px; }
+  body.wide-room .sk-av-ph { width: 64px; height: 64px; }
+  body.wide-room .sk-av-name { font-size: 13px; max-width: 96px; }
+  body.wide-room .sk-av.l .sk-say { left: 76px; }
+  body.wide-room .sk-av.r .sk-say { right: 76px; }
+  body.wide-room .sk-stage { justify-items: center; }
+  body.wide-room .sk-canvas { width: min(100%, calc(100vh - 290px)); }
+  body.wide-room .aq-txt { font-size: 17px; }
+  body.wide-room .aq-slot { width: 42px; height: 46px; font-size: 26px; }
+}
+/* association quiz on phones: everything above the pinned chat */
+@media (max-width: 959px) {
+  .room.aq { gap: 12px; padding-top: 10px; }
+  .room.aq .room-head h2 { font-size: 24px; }
+  .room.aq .aq-info { gap: 6px; padding: 8px 10px; }
+  .room.aq .aq-slot { width: 30px; height: 34px; font-size: 20px; }
+  .room.aq .stage { padding-top: 34px; }
+  .room.aq .aq-hints li { padding: 5px 9px; }
+  .room.aq .aq-txt { font-size: 14px; }
+}
+@media (max-width: 959px) { .stage { gap: 10px 12px; } .st-say { max-width: 108px; font-size: 12px; padding: 4px 8px; } }
+@media (min-width: 960px) {
+  body.wide-room .sk-canvas { width: min(100%, calc(100vh - 400px)); }
+  body.wide-room .vote-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

@@ -10,6 +10,7 @@ import {
   arrayUnion, arrayRemove, Timestamp, deleteField
 } from "firebase/firestore";
 import LOGO from "./logo.txt";
+import { AQ_BANK } from "./assoc_bank.js";
 
 /* ---------- Firebase ---------- */
 const firebaseConfig = {
@@ -330,6 +331,11 @@ function sfxRoom(a, b) {
     else if (st && b.status === "reveal") sfx("timeup");
     if (b.status === "draw" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) later("ding", 300);
     if (st && b.status === "result") later("fanfare", 400);
+  } else if (b.type === "assoc") {
+    if ((b.solved || []).length > (a.solved || []).length) sfx("correct");
+    else if (st && b.status === "reveal") sfx("timeup");
+    if (b.status === "clue" && (st || a.qn !== b.qn)) later("ding", 250);
+    if (st && b.status === "result") later("fanfare", 400);
   } else if (b.type === "smoke") {
     if (st && b.status === "play") sfx("go");
     else if (st && b.status === "shot") sfx("bang");
@@ -359,7 +365,8 @@ const TICKS = {
   mafia: { vote: "clock", defense: "clock", verdict: "clock", night: 10, day: 10 },
   liar: { vote: "clock", guess: "clock", hint: 5, discuss: 10 },
   sketch: { draw: 10 },
-  smoke: { play: 3 }
+  smoke: { play: 3 },
+  assoc: { clue: 5 }
 };
 function sfxTimer(r, sec, leftMs) {
   const key = r.id + ":" + r.phase;
@@ -1378,33 +1385,31 @@ function isStandalone() {
 }
 window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INSTALL.evt = e; render(); });
 window.addEventListener("appinstalled", function () { INSTALL.evt = null; INSTALL.done = true; toast("비밀본부 앱을 설치했어요!"); render(); });
-if ("serviceWorker" in navigator && location.protocol === "https:") {
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
 }
 async function runInstall() {
-  const e = INSTALL.evt; if (!e) return;
+  const e = INSTALL.evt; if (!e) return false;
   INSTALL.evt = null;
   try { e.prompt(); const r = await e.userChoice; if (r && r.outcome === "accepted") INSTALL.done = true; } catch (err) {}
   render();
+  return true;
 }
-function installSteps() {
-  const pc = h("div", null, h("h3", { text: "컴퓨터 (Chrome · Edge · 웨일)" }),
-    h("ol", null,
-      h("li", { text: "이 주소를 Chrome, Edge 또는 웨일로 엽니다." }),
-      h("li", { text: "주소창 오른쪽 끝의 설치 아이콘(모니터에 ↓ 모양)을 누릅니다." }),
-      h("li", { text: "안 보이면 오른쪽 위 메뉴(⋮ 또는 ⋯)에서 ‘앱 설치’ · ‘이 사이트를 앱으로 설치’ · ‘페이지를 앱으로 설치’를 찾습니다." }),
-      h("li", { text: "‘설치’를 누르면 바탕화면과 시작 메뉴(맥은 Launchpad)에 비밀본부가 생깁니다." })));
-  const mac = h("div", null, h("h3", { text: "맥 (Safari)" }),
-    h("ol", null,
-      h("li", { text: "이 주소를 Safari로 엽니다." }),
-      h("li", { text: "위쪽 메뉴에서 ‘파일’ → ‘Dock에 추가…’를 누릅니다. (macOS Sonoma 이상)" }),
-      h("li", { text: "‘추가’를 누르면 Dock과 응용 프로그램 폴더에 비밀본부가 생깁니다." })));
-  const ios = h("div", null, h("h3", { text: "아이폰 (Safari)" }),
-    h("ol", null, h("li", { text: "이 주소를 Safari로 엽니다." }), h("li", { text: "아래쪽 공유 버튼(네모에 화살표)을 누릅니다." }), h("li", { text: "‘홈 화면에 추가’를 누릅니다." })));
-  const and = h("div", null, h("h3", { text: "안드로이드 (Chrome)" }),
-    h("ol", null, h("li", { text: "이 주소를 Chrome으로 엽니다." }), h("li", { text: "오른쪽 위 ⋮ 메뉴를 누릅니다." }), h("li", { text: "‘앱 설치’ 또는 ‘홈 화면에 추가’를 누릅니다." })));
-  const order = IS_IOS ? [ios, and, pc, mac] : IS_ANDROID ? [and, ios, pc, mac] : IS_MAC && IS_SAFARI ? [mac, pc, ios, and] : [pc, mac, ios, and];
-  return order;
+const IS_KAKAO = /KAKAOTALK/i.test(UA);
+const IS_INAPP = IS_KAKAO || /Instagram|FBAN|FBAV|NAVER\(inapp|Line\/|DaumApps|everytimeApp|Band\//i.test(UA);
+/* one button: install right away when the browser allows it, otherwise show only the one way that works here */
+async function installClick() {
+  if (await runInstall()) return;
+  if (IS_KAKAO) { location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(location.origin + location.pathname); return; }
+  let title, steps;
+  if (IS_INAPP) { title = "브라우저에서 열어야 설치돼요"; steps = ["오른쪽 위(또는 아래) ⋮ · ⋯ 메뉴를 눌러요.", "‘다른 브라우저로 열기’ 또는 ‘Chrome/Safari로 열기’를 눌러요.", "열린 화면에서 이 버튼을 다시 눌러요."]; }
+  else if (IS_IOS) { title = "아이폰은 두 번만 누르면 돼요"; steps = ["화면 아래(또는 주소창 옆) 공유 버튼 ⬆️ 을 눌러요.", "‘홈 화면에 추가’ → ‘추가’를 눌러요."]; }
+  else if (IS_MAC && IS_SAFARI) { title = "맥 Safari는 메뉴에서 바로 돼요"; steps = ["화면 맨 위 메뉴에서 ‘파일’을 눌러요.", "‘Dock에 추가…’ → ‘추가’를 눌러요."]; }
+  else if (IS_ANDROID) { title = "Chrome 메뉴에서 바로 돼요"; steps = ["오른쪽 위 ⋮ 메뉴를 눌러요.", "‘앱 설치’ 또는 ‘홈 화면에 추가’를 눌러요."]; }
+  else { title = "이미 설치돼 있거나, 주소창에서 바로 돼요"; steps = ["주소창 오른쪽 끝의 설치 아이콘(모니터에 ↓)을 눌러요.", "없으면 오른쪽 위 ⋮ 메뉴 → ‘전송, 저장, 공유’ 또는 ‘앱’ → ‘앱 설치’를 눌러요.", "이미 설치했다면 바탕화면 · 시작 메뉴의 ‘비밀본부’를 열면 돼요."]; }
+  openSheet("앱 설치", title, h("div", { class: "install-help" },
+    h("ol", null, steps.map(function (t) { return h("li", { text: t }); })),
+    h("button", { type: "button", class: "save", onclick: closeEditor, text: "알겠어요" })));
 }
 function installPanel() {
   if (isStandalone() || INSTALL.done) {
@@ -1412,22 +1417,14 @@ function installPanel() {
       h("span", { class: "eyebrow", text: "앱 설치" }),
       h("p", { text: INSTALL.done && !isStandalone() ? "설치 완료! 이제 바탕화면 · 시작 메뉴(폰은 홈 화면)의 ‘비밀본부’로 바로 들어올 수 있어요." : "설치된 비밀본부 앱으로 접속 중이에요." }));
   }
-  const where = IS_MOBILE ? "폰 홈 화면" : "컴퓨터";
-  const canPrompt = !!INSTALL.evt;
-  const safariMacNote = IS_MAC && IS_SAFARI ? "Safari는 위쪽 메뉴 ‘파일 → Dock에 추가…’로 설치해요." : "";
   return h("div", { class: "install" },
     h("div", { class: "install-head" },
       h("img", { src: "icon-192.png", alt: "", class: "install-icon" }),
       h("div", null,
         h("span", { class: "eyebrow", text: "앱 설치 · 무료" }),
-        h("b", { text: "비밀본부를 " + where + "에 설치하기" }),
-        h("small", { text: IS_MOBILE ? "앱처럼 아이콘 한 번에 들어와요." : "윈도우 · 맥 모두 돼요. 바탕화면 아이콘으로 창 하나에서 바로 열려요." }))),
-    canPrompt
-      ? h("button", { type: "button", class: "save", onclick: runInstall, text: IS_MOBILE ? "📥 앱 설치하기" : "💻 컴퓨터에 설치하기" })
-      : safariMacNote ? h("p", { class: "note", text: safariMacNote }) : null,
-    h("details", { class: "guide", open: !canPrompt && !safariMacNote ? "" : null },
-      h("summary", { text: canPrompt ? "다른 기기에 설치하는 법" : "설치하는 법" }),
-      h("div", { class: "guide-body" }, installSteps())));
+        h("b", { text: IS_MOBILE ? "비밀본부를 폰에 설치하기" : "비밀본부를 컴퓨터에 설치하기" }),
+        h("small", { text: "버튼 하나로 끝. 아이콘 누르면 바로 열려요." }))),
+    h("button", { type: "button", class: "save", onclick: installClick, text: IS_MOBILE ? "📥 앱 설치하기" : "💻 컴퓨터에 설치하기" }));
 }
 function isGoogleUser(u) { return !!(u && (u.providerData || []).some(function (p) { return p.providerId === "google.com"; })); }
 function bossPanel() {
@@ -1556,7 +1553,7 @@ function screenDetail(id) {
 
 /* ---------- screens: games ---------- */
 const GAMES = [
-  { id: "assoc", code: "G-01", name: "연상퀴즈", desc: "단어 하나로 떠올리는 조직원들의 머릿속.", ready: false },
+  { id: "assoc", code: "G-01", name: "연상퀴즈", desc: "힌트 다섯 개, 먼저 맞힐수록 고득점.", ready: true },
   { id: "mafia", code: "G-02", name: "마피아", desc: "조직 안에 조직이 있다. 밤마다 한 명씩.", ready: true },
   { id: "yut", code: "G-03", name: "윷놀이", desc: "도·개·걸·윷·모로 가리는 본부 서열.", ready: false },
   { id: "liar", code: "G-04", name: "라이어", desc: "혼자만 제시어를 모르는 사람을 찾아라.", ready: true },
@@ -1564,7 +1561,7 @@ const GAMES = [
   { id: "smoke", code: "G-06", name: "빨리 담배피기", desc: "들숨 날숨 타이밍 싸움. 꼴찌는 킬러가 처리한다.", ready: true },
   { id: "manito", code: "G-07", name: "크리스마스 마니또", desc: "몰래 칭찬하고, 크리스마스에 정체 공개.", ready: true }
 ];
-const GAME_NAME = { liar: "라이어", mafia: "마피아", sketch: "드로잉퀴즈", smoke: "빨리 담배피기" };
+const GAME_NAME = { liar: "라이어", mafia: "마피아", sketch: "드로잉퀴즈", smoke: "빨리 담배피기", assoc: "연상퀴즈" };
 function screenOpenRooms() {
   const me = meMember();
   const rooms = S.rooms.filter(roomAlive);
@@ -1652,7 +1649,7 @@ async function createRoom(type) {
   if (!me || !S.user) return;
   try {
     const ref = await addDoc(collection(db, "rooms"), {
-      type: type === "mafia" || type === "sketch" || type === "smoke" ? type : "liar",
+      type: type === "mafia" || type === "sketch" || type === "smoke" || type === "assoc" ? type : "liar",
       status: "lobby", createdAt: serverTimestamp(), createdBy: me.id, players: [me.id],
       mode: 0, topicChoice: -1, rounds: 1, game: 0, votes: {}, turn: 0
     });
@@ -1791,7 +1788,7 @@ async function submitGuess(text, timedOut, expectPhase) {
 /* ---------- Liar: phase timers ---------- */
 const GRACE_MS = 1500;
 let lastTimeoutKey = "";
-function durOf(r) { return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : r && r.type === "smoke" ? SMDUR : DUR)[r && r.status]; }
+function durOf(r) { return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : r && r.type === "smoke" ? SMDUR : r && r.type === "assoc" ? AQDUR : DUR)[r && r.status]; }
 function phaseEnd(r) {
   if (!r || !durOf(r) || !r.phaseAt || !r.phaseAt.toMillis) return null;
   return r.phaseAt.toMillis() + durOf(r) * 1000;
@@ -1809,6 +1806,7 @@ async function onTimeout(r) {
   if (r.type === "mafia") return mafiaTimeout(r);
   if (r.type === "sketch") return sketchTimeout(r);
   if (r.type === "smoke") return smokeTimeout(r);
+  if (r.type === "assoc") return assocTimeout(r);
   if (r.status === "hint") return advanceTurn("timeout", null, r.phase);
   if (r.status === "discuss") return toVote(r.phase);
   if (r.status === "vote") return finalizeVotes(true, r.phase);
@@ -1822,6 +1820,7 @@ setInterval(function () {
   const left = end - Date.now(), total = durOf(r) * 1000;
   const sec = Math.max(0, Math.ceil(left / 1000));
   sfxTimer(r, sec, left);
+  if (r.type === "assoc") aqTickHint(r);
   document.querySelectorAll(".timer").forEach(function (el) {
     el.querySelector(".t-num").textContent = fmtSec(sec);
     el.querySelector(".t-bar i").style.width = Math.max(0, Math.min(100, left / total * 100)) + "%";
@@ -1834,7 +1833,7 @@ setInterval(function () {
   }
 }, 500);
 async function backToLobby() {
-  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false, board: [], shot: null, round: 0, rk: 0, out: [] });
+  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false, board: [], shot: null, round: 0, rk: 0, out: [], cur: null, qn: 0, solved: [], tries: {}, pts: {} });
 }
 
 function screenRoom(id) {
@@ -1847,6 +1846,7 @@ function screenRoom(id) {
   if (r.type === "mafia") return screenMafiaRoom(r);
   if (r.type === "sketch") return screenSketchRoom(r);
   if (r.type === "smoke") return screenSmokeRoom(r);
+  if (r.type === "assoc") return screenAssocRoom(r);
 
   const me = meMember();
   const players = r.players || [];
@@ -1880,8 +1880,15 @@ function screenRoom(id) {
   const card = playing && isPlayer && r.status !== "result" ? myCard(r, me, d) : null;
   const showLog = playing || S.msgs.length;
 
+  const stage = playing ? crewStage(lineup, saidMap(r, ["chat", "hint"]), function (p) {
+    const n = (r.order || []).length, speaker = n ? r.order[r.turn % n] : null;
+    if (r.status === "hint" && p === speaker) return { cls: "now", badge: "🎤" };
+    if (r.status === "vote" && r.votes && r.votes[p]) return { cls: "ok", badge: "✓", badgeCls: "ok", sub: "투표 완료" };
+    if ((r.status === "guess" || r.status === "result") && r.accused === p) return { cls: "now", badge: "☝" };
+    return null;
+  }) : null;
   return h("section", { class: "screen room" }, back, head,
-    h("div", { class: "field" }, h("div", { class: "field-label", text: (playing ? "참가자 " : "모인 사람 ") + lineup.length + "명" }), chips),
+    playing ? stage : h("div", { class: "field" }, h("div", { class: "field-label", text: "모인 사람 " + lineup.length + "명" }), chips),
     card, phase,
     showLog ? chatBox(r, me) : null);
 }
@@ -2320,8 +2327,18 @@ function screenMafiaRoom(r) {
   else if (r.status === "verdict") phase = mVerdictPanel(r, ctx);
   else phase = mResultPanel(r, ctx);
 
+  const stage = playing ? crewStage(lineup, saidMap(r, ["chat", "defense"]), function (p) {
+    const dead = alive.indexOf(p) < 0;
+    let sub = null;
+    if (roles && (seeAll || (myRole === "mafia" && roles[p] === "mafia"))) sub = ROLE[roles[p]].name;
+    const voted = (r.status === "vote" && r.votes && r.votes[p]) || (r.status === "verdict" && r.verdict && r.verdict[p]);
+    if (dead) return { cls: "dead", badge: "☠", sub: sub };
+    if ((r.status === "defense" || r.status === "verdict") && r.accused === p) return { cls: "now", badge: "⚖", sub: sub };
+    if (voted) return { cls: "ok", badge: "✓", badgeCls: "ok", sub: sub || "투표 완료" };
+    return { sub: sub };
+  }) : null;
   return h("section", { class: "screen room" + (r.status === "night" ? " is-night" : "") }, back, head,
-    h("div", { class: "field" }, h("div", { class: "field-label", text: (playing ? "참가자 " + alive.length + "/" + lineup.length + "명 생존" : "모인 사람 " + lineup.length + "명") }), chips),
+    h("div", { class: "field" }, h("div", { class: "field-label", text: (playing ? "참가자 " + alive.length + "/" + lineup.length + "명 생존" : "모인 사람 " + lineup.length + "명") }), playing ? stage : chips),
     playing && isPlayer && !over ? roleCard(r, ctx) : null,
     phase,
     mChat(r, ctx));
@@ -2482,6 +2499,285 @@ function mChat(r, ctx) {
   return h("div", { class: "field dock" }, h("div", { class: "field-label", text: ctx.myRole === "mafia" && r.status === "night" && ctx.iAlive ? "대화 · 지금은 마피아끼리만 보여요" : "대화" }), log, f);
 }
 
+
+/* ---------- 연상퀴즈: 힌트가 하나씩 열리고, 먼저 맞힐수록 고득점 ---------- */
+const AQDUR = { clue: 60, reveal: 6 };
+if (FAST) Object.keys(AQDUR).forEach(function (k) { AQDUR[k] = Math.max(2, Math.round(AQDUR[k] / FAST)); });
+const AQ_HINTS = 5, AQ_TRIES = 3;
+const AQ = { key: null, idx: -1 };
+function aqHintMs() { return AQDUR.clue * 1000 / AQ_HINTS; }
+function aqHintIdx(r, now) {
+  if (!r || r.status !== "clue") return AQ_HINTS - 1;
+  if (!r.phaseAt || !r.phaseAt.toMillis) return 0;
+  return Math.max(0, Math.min(AQ_HINTS - 1, Math.floor(((now || Date.now()) - r.phaseAt.toMillis()) / aqHintMs())));
+}
+function aqPts(idx) { return AQ_HINTS - idx; }      /* 힌트 1에서 맞히면 5점 … 힌트 5에서 1점 */
+function aqPick(used) {
+  let pool = [];
+  for (let i = 0; i < AQ_BANK.length; i++) if ((used || []).indexOf(i) < 0) pool.push(i);
+  if (!pool.length) pool = AQ_BANK.map(function (_, i) { return i; });
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function aqCur(i) { const q = AQ_BANK[i]; return { i: i, a: q.a, alt: q.alt || [], h: q.h.slice(0, AQ_HINTS) }; }
+function aqMatch(text, cur) {
+  const t = normWord(text);
+  return !!t && [cur.a].concat(cur.alt || []).some(function (w) { return normWord(w) === t; });
+}
+function aqLen(cur) { return Array.from(cur && cur.a || "").length; }
+function aqDone(rr, solved, tries) {
+  return (rr.lineup || []).every(function (p) { return solved.indexOf(p) >= 0 || (tries[p] || 0) >= AQ_TRIES; });
+}
+async function startAssoc() {
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "lobby") throw { code: "phase" };
+      const lineup = presentPlayers(r).slice().sort();
+      if (lineup.length < 1) throw { code: "few" };
+      const qi = aqPick(r.usedQ || []);
+      const game = (r.game || 0) + 1;
+      sysMsg(tx, { game: game }, "🧠 연상퀴즈 시작! " + (r.qcount || 5) + "문제, 힌트가 " + Math.round(aqHintMs() / 1000) + "초마다 하나씩 열려요.");
+      tx.update(roomRef(), nextPhase(r, {
+        status: "clue", lineup: lineup, cur: aqCur(qi), usedQ: (r.usedQ || []).concat([qi]).slice(-60), qn: 0, total: r.qcount || 5,
+        solved: [], tries: {}, pts: {}, scores: {}, game: game, startedAt: serverTimestamp()
+      }));
+    });
+  } catch (e) {
+    if (e && e.code === "phase") toast("이미 게임이 시작됐어요.");
+    else if (e && e.code === "few") toast("방에 들어와 있는 사람이 없어요.");
+    else toast(errText(e));
+  }
+}
+async function aqToReveal(expectPhase, why) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "clue") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    sysMsg(tx, r, (why || "⏰ 시간 끝!") + " 정답은 ‘" + r.cur.a + "’");
+    tx.update(roomRef(), nextPhase(r, { status: "reveal" }));
+  });
+}
+async function aqNext(expectPhase) {
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "reveal") return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    const next = (r.qn || 0) + 1;
+    if (next >= (r.total || 5)) {
+      sysMsg(tx, r, "🏁 연상퀴즈 끝! 점수를 확인하세요.");
+      tx.update(roomRef(), nextPhase(r, { status: "result" }));
+      return;
+    }
+    const qi = aqPick(r.usedQ || []);
+    sysMsg(tx, r, "🧠 " + (next + 1) + "번째 문제!");
+    tx.update(roomRef(), nextPhase(r, { status: "clue", qn: next, cur: aqCur(qi), usedQ: (r.usedQ || []).concat([qi]).slice(-60), solved: [], tries: {}, pts: {} }));
+  });
+}
+function assocTimeout(r) {
+  if (r.status === "clue") return aqToReveal(r.phase);
+  if (r.status === "reveal") return aqNext(r.phase);
+}
+async function aqGuess(text) {
+  const me = meMember(), r = S.room;
+  if (!me || !r) return;
+  const canGuess = r.status === "clue" && (r.lineup || []).indexOf(me.id) >= 0 && (r.solved || []).indexOf(me.id) < 0 && ((r.tries || {})[me.id] || 0) < AQ_TRIES;
+  if (!canGuess) { await sendMsg("chat", text); return; }
+  let result = null;
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const rr = snap.data();
+    if (!rr || rr.status !== "clue" || rr.qn !== r.qn || rr.game !== r.game) throw { code: "late" };
+    const solved = (rr.solved || []).slice(), tries = Object.assign({}, rr.tries || {});
+    if (solved.indexOf(me.id) >= 0 || (tries[me.id] || 0) >= AQ_TRIES) throw { code: "used" };
+    if (aqMatch(text, rr.cur)) {
+      const idx = aqHintIdx(rr), first = solved.length === 0;
+      const pts = aqPts(idx) + (first ? 1 : 0);
+      const scores = Object.assign({}, rr.scores || {}), got = Object.assign({}, rr.pts || {});
+      scores[me.id] = (scores[me.id] || 0) + pts; got[me.id] = pts;
+      solved.push(me.id);
+      sysMsg(tx, rr, "🎯 " + me.nick + "님 정답! 힌트 " + (idx + 1) + "개 보고 맞혔어요 (+" + pts + "점" + (first ? ", 1등 보너스 포함" : "") + ")");
+      const patch = { solved: solved, scores: scores, pts: got };
+      if (aqDone(rr, solved, tries)) { sysMsg(tx, rr, "다 끝났어요! 정답은 ‘" + rr.cur.a + "’"); Object.assign(patch, nextPhase(rr, { status: "reveal" })); }
+      tx.update(roomRef(), patch);
+      result = { ok: true, pts: pts };
+    } else {
+      tries[me.id] = (tries[me.id] || 0) + 1;
+      tx.set(doc(collection(db, "rooms", S.roomId, "msgs")), {
+        uid: myUid(), memberId: me.id, nick: me.nick, text: text, kind: "guess", game: rr.game || 0, createdAt: serverTimestamp()
+      });
+      const patch = { tries: tries };
+      if (aqDone(rr, solved, tries)) { sysMsg(tx, rr, "모두 기회를 다 썼어요. 정답은 ‘" + rr.cur.a + "’"); Object.assign(patch, nextPhase(rr, { status: "reveal" })); }
+      tx.update(roomRef(), patch);
+      result = { ok: false, left: AQ_TRIES - tries[me.id] };
+    }
+  });
+  if (result && !result.ok) { sfx("sad"); toast(result.left ? "땡! 기회 " + result.left + "번 남았어요." : "땡! 이번 문제 기회를 다 썼어요."); }
+}
+/* a new hint opens: redraw and play a sound */
+function aqTickHint(r) {
+  if (r.status !== "clue") return;
+  const key = r.id + ":" + r.phase, idx = aqHintIdx(r);
+  if (AQ.key !== key) { AQ.key = key; AQ.idx = idx; return; }
+  if (idx !== AQ.idx) { AQ.idx = idx; sfx("flip"); render(); return; }
+  const w = document.querySelector(".aq-wait");
+  if (w && r.phaseAt && r.phaseAt.toMillis) w.textContent = Math.max(1, Math.ceil((r.phaseAt.toMillis() + (idx + 1) * aqHintMs() - Date.now()) / 1000)) + "초 뒤 공개";
+}
+function aqSlots(cur, show) {
+  return h("div", { class: "aq-slots", "aria-label": "정답 " + aqLen(cur) + "글자" }, Array.from(cur.a).map(function (ch) {
+    return h("span", { class: "aq-slot" + (show ? " open" : ""), text: show ? ch : "" });
+  }));
+}
+function screenAssocLobby() {
+  const me = meMember();
+  const rooms = S.rooms.filter(function (r) { return roomAlive(r) && r.type === "assoc"; });
+  const list = rooms.length
+    ? h("ul", { class: "room-list" }, rooms.map(function (r) {
+        const mine = me && (r.players || []).indexOf(me.id) >= 0;
+        const label = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : "게임 중";
+        return h("li", null, h("button", { type: "button", class: "room-item", onclick: function () { go("room-" + r.id); } },
+          h("span", { class: "ri-main" },
+            h("b", { text: nickOf(r.createdBy) + "의 방" }),
+            h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
+          h("span", { class: "ri-side" },
+            h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
+            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+      }))
+    : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
+  const sec = Math.round(aqHintMs() / 1000);
+  return h("section", { class: "screen" },
+    h("button", { class: "back", type: "button", onclick: function () { go("games"); }, text: "게임방으로" }),
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: "G-01" }), h("h2", { text: "연상퀴즈" }),
+        h("p", { text: "힌트가 하나씩 열려요. 헷갈리는 힌트에서 먼저 맞힐수록 점수가 커요." }))),
+    h("button", { type: "button", class: "save", disabled: !me || !S.user, onclick: function () { createRoom("assoc"); } },
+      me ? "새 방 만들기" : "신원을 고른 조직원만 방을 만들 수 있어요"),
+    h("div", { class: "field" }, h("div", { class: "field-label", text: "열린 방" }), list),
+    h("details", { class: "guide" },
+      h("summary", { text: "연상퀴즈 규칙" }),
+      h("div", { class: "guide-body" },
+        h("ol", null,
+          h("li", { text: "문제마다 정답 글자 수가 네모 칸으로 보여요." }),
+          h("li", { text: "힌트는 " + sec + "초마다 하나씩, 모두 " + AQ_HINTS + "개 열려요. 앞쪽 힌트일수록 일부러 헷갈리게 만들었어요." }),
+          h("li", { text: "대화창에 정답을 입력해요. 힌트 1개 보고 맞히면 5점, 2개 4점 … 5개 다 보고 맞히면 1점이에요. 제일 먼저 맞힌 사람은 1점 더!" }),
+          h("li", { text: "한 문제에 기회는 " + AQ_TRIES + "번. 틀린 답은 말풍선으로 모두에게 보여요. 맞힌 답은 숨겨져요." }),
+          h("li", { text: "모두 맞히거나 기회를 다 쓰면 바로 정답이 공개되고 다음 문제로 넘어가요." })))));
+}
+function aqLobbyPanel(r, me, inRoom, players) {
+  function seg(value, label) {
+    return h("button", { type: "button", "aria-pressed": (r.qcount || 5) === value ? "true" : "false",
+      onclick: function () { roomUpdate({ qcount: value }); } }, label);
+  }
+  return h("div", { class: "panel" },
+    h("div", { class: "field-label", text: "게임 설정 · 참가자 누구나 바꿀 수 있어요" }),
+    h("div", { class: "seg" }, seg(5, "5문제"), seg(10, "10문제"), seg(15, "15문제")),
+    !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
+      : inRoom
+        ? h("div", { class: "op-row" },
+            h("button", { type: "button", onclick: leaveRoom, text: "방 나가기" }),
+            h("button", { type: "button", class: "go", onclick: startAssoc, text: "게임 시작" }))
+        : h("button", { type: "button", class: "save", onclick: joinRoom, text: "이 방에 참가하기" }),
+    h("p", { class: "hint", text: "혼자서도 할 수 있지만, 여럿이 하면 먼저 맞히기 싸움이 돼요. 단톡방에 ‘게임방 → 연상퀴즈에 방 열었어’라고 알려주세요." }));
+}
+function aqResultPanel(r) {
+  const scores = r.scores || {};
+  const rank = (r.lineup || []).slice().sort(function (a, b) { return (scores[b] || 0) - (scores[a] || 0); });
+  const medal = ["🥇", "🥈", "🥉"];
+  return h("div", { class: "answer team" },
+    h("div", { class: "result-title", text: nickOf(rank[0]) + " 우승!" }),
+    h("ul", { class: "role-list" }, rank.map(function (p, i) {
+      return h("li", null, h("span", { text: (medal[i] || (i + 1) + "등") + " " + nickOf(p) }), h("b", { text: (scores[p] || 0) + "점" }));
+    })),
+    h("div", { class: "op-row" },
+      h("button", { type: "button", onclick: function () { go("game-assoc"); }, text: "방 목록" }),
+      h("button", { type: "button", class: "go", onclick: backToLobby, text: "같은 방에서 한 판 더" })));
+}
+function screenAssocRoom(r) {
+  const back = h("button", { class: "back", type: "button", onclick: function () { go("game-assoc"); }, text: "연상퀴즈 방 목록" });
+  const me = meMember();
+  const players = r.players || [];
+  const inRoom = me && players.indexOf(me.id) >= 0;
+  const playing = r.status !== "lobby";
+  const lineup = playing ? (r.lineup || []) : players;
+  if (playing && r.status !== "result" && !r.cur) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "게임 정보를 읽지 못했어요." }),
+    h("button", { type: "button", class: "ghost wide", onclick: backToLobby, text: "대기실로 돌리기" }));
+  const scores = r.scores || {}, solved = r.solved || [], tries = r.tries || {};
+  const title = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : ((r.qn || 0) + 1) + " / " + (r.total || 5) + "번째 문제";
+  const head = h("div", { class: "room-head" },
+    h("div", null, h("span", { class: "eyebrow", text: "연상퀴즈 · " + nickOf(r.createdBy) + "의 방" }), h("h2", { text: title })),
+    h("span", { class: "mode-chip", text: ((playing ? r.total : r.qcount) || 5) + "문제" }));
+
+  let body;
+  if (r.status === "lobby") {
+    body = [h("div", { class: "field" }, h("div", { class: "field-label", text: "모인 사람 " + lineup.length + "명" }),
+      h("div", { class: "chips" }, lineup.map(function (p) { return h("span", { class: "chip static" + (me && p === me.id ? " me" : "") }, nickOf(p)); }))),
+      aqLobbyPanel(r, me, inRoom, players)];
+  } else if (r.status === "result") {
+    body = [aqResultPanel(r)];
+  } else {
+    const cur = r.cur, idx = aqHintIdx(r), reveal = r.status === "reveal";
+    const iSolved = me && solved.indexOf(me.id) >= 0;
+    const myTries = me ? (tries[me.id] || 0) : 0;
+    const isPlayer = me && lineup.indexOf(me.id) >= 0;
+    let status = "";
+    if (reveal) status = solved.length ? "맞힌 사람: " + solved.map(function (p) { return nickOf(p) + " +" + ((r.pts || {})[p] || 0); }).join(", ") : "아무도 못 맞혔어요.";
+    else if (iSolved) status = "정답! +" + ((r.pts || {})[me.id] || 0) + "점 · 다른 사람을 기다리는 중";
+    else if (isPlayer) status = myTries >= AQ_TRIES ? "기회를 다 썼어요. 다음 문제를 기다려요." : "남은 기회 " + "●".repeat(AQ_TRIES - myTries) + "○".repeat(myTries) + " · 지금 맞히면 " + aqPts(idx) + "점" + (solved.length ? "" : " (+1등 보너스)");
+    else status = "관전 중";
+    const info = h("div", { class: "panel turn aq-info" + (reveal ? " reveal" : "") },
+      timerEl(r, reveal ? "정답 공개 · 다음 문제까지" : "남은 시간"),
+      h("div", { class: "aq-len" }, aqSlots(cur, reveal || iSolved), h("b", { text: aqLen(cur) + "글자" })),
+      h("p", { class: "aq-status" + (iSolved ? " ok" : ""), text: status }));
+    const hintMs = aqHintMs();
+    const nextAt = !reveal && r.phaseAt && r.phaseAt.toMillis ? r.phaseAt.toMillis() + (idx + 1) * hintMs : null;
+    const hints = h("ol", { class: "aq-hints" }, cur.h.map(function (t, i) {
+      const open = reveal || i <= idx;
+      const wait = nextAt && i === idx + 1 ? Math.max(1, Math.ceil((nextAt - Date.now()) / 1000)) : null;
+      return h("li", { class: (open ? "open" : "locked") + (!reveal && i === idx ? " new" : "") },
+        h("span", { class: "aq-no", text: "힌트 " + (i + 1) }),
+        h("span", { class: "aq-txt" + (wait ? " aq-wait" : ""), text: open ? t : wait ? wait + "초 뒤 공개" : "잠김" }),
+        h("span", { class: "aq-pt", text: aqPts(i) + "점" }));
+    }));
+    const stage = crewStage(lineup, saidMap(r, ["chat", "guess"]), function (p) {
+      const sub = (scores[p] || 0) + "점";
+      if (solved.indexOf(p) >= 0) return { cls: "ok", badge: "✓", badgeCls: "ok", sub: sub };
+      if ((tries[p] || 0) >= AQ_TRIES) return { cls: "out", badge: "✗", sub: sub };
+      return { sub: sub };
+    });
+    body = [info, stage, hints];
+  }
+  return h("section", { class: "screen room aq" }, back, head, body, aqChat(r, me));
+}
+function aqChat(r, me) {
+  const game = r.game || 0;
+  const msgs = S.msgs.filter(function (m) { return (m.game || 0) === game; });
+  const isPlayer = me && (r.lineup || []).indexOf(me.id) >= 0;
+  const done = me && (r.solved || []).indexOf(me.id) >= 0;
+  const used = me ? ((r.tries || {})[me.id] || 0) : 0;
+  let ph = "대화 보내기", enabled = true;
+  if (r.status === "clue") {
+    if (!isPlayer) { ph = "게임 중에는 참가자만 입력할 수 있어요"; enabled = false; }
+    else if (done) { ph = "정답! 다음 문제를 기다려요"; enabled = false; }
+    else if (used >= AQ_TRIES) { ph = "이번 문제 기회를 다 썼어요"; enabled = false; }
+    else ph = "정답 입력 (기회 " + (AQ_TRIES - used) + "번)";
+  }
+  const log = h("div", { class: "log", role: "log", "aria-live": "polite" },
+    msgs.length ? msgs.map(function (m) {
+      if (m.kind === "sys" || m.kind === "skip") return h("div", { class: "msg-sys strong", text: m.text });
+      const mine = me && m.memberId === me.id;
+      return h("div", { class: "bubble chat" + (mine ? " mine" : "") + (m.kind === "guess" ? " wrong" : "") },
+        h("div", { class: "b-meta" }, h("b", { text: m.nick || "손님" }), m.kind === "guess" ? h("span", { class: "b-tag", text: "오답" }) : null),
+        h("div", { class: "b-text", text: m.text }));
+    }) : h("div", { class: "msg-sys", text: "아직 대화가 없어요." }));
+  const inp = draft("input", "chat-text", { type: "text", class: "text-in", maxlength: "60", placeholder: ph, autocomplete: "off", disabled: !enabled });
+  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm" + (r.status === "clue" && enabled ? " go" : ""), disabled: !enabled, text: r.status === "clue" ? "제출" : "보내기" }));
+  f.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = inp.value.trim(); if (!t || !S.user || !enabled) return;
+    S.drafts["chat-text"] = ""; inp.value = "";
+    try { await aqGuess(t); render(); }
+    catch (e) { toast(e && e.code === "late" ? "아쉽게 시간이 지났어요." : e && e.code === "used" ? "이번 문제는 더 낼 수 없어요." : errText(e)); }
+  });
+  return h("div", { class: "field dock" }, h("div", { class: "field-label", text: r.status === "clue" ? "정답 맞히기 · 대화" : "대화" }), log, f);
+}
 
 /* ---------- Sketch (드로잉퀴즈): drawing and guessing ---------- */
 const SDUR = { draw: 60, reveal: 5 };
@@ -2870,17 +3166,47 @@ function screenSketchRoom(r) {
 }
 /* latest chat line per player, shown as a speech bubble for a few seconds */
 const SAY_MS = 6000;
-function skSaid(r) {
+function saidMap(r, kinds) {
   const out = {}, now = Date.now(), game = r.game || 0;
   let next = Infinity;
+  kinds = kinds || ["chat"];
   S.msgs.forEach(function (m) {
-    if ((m.game || 0) !== game || m.kind !== "chat" || !m.memberId) return;
+    if ((m.game || 0) !== game || kinds.indexOf(m.kind) < 0 || !m.memberId) return;
     const t = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : now;
-    if (now - t < SAY_MS) { out[m.memberId] = m.text; next = Math.min(next, t + SAY_MS); }
+    if (now - t < SAY_MS) { out[m.memberId] = { text: m.text, kind: m.kind }; next = Math.min(next, t + SAY_MS); }
   });
   clearTimeout(SK.sayT);
   if (next < Infinity) SK.sayT = setTimeout(render, Math.max(200, next - now + 100));
   return out;
+}
+function skSaid(r) {
+  const m = saidMap(r, ["chat"]), out = {};
+  Object.keys(m).forEach(function (k) { out[k] = m[k].text; });
+  return out;
+}
+/* characters in a row with what they just said in a bubble above their heads */
+function crewStage(lineup, said, state) {
+  const me = meMember();
+  return h("div", { class: "stage" }, lineup.map(function (p) {
+    const x = (state && state(p)) || {};
+    const say = said[p];
+    return h("div", { class: "st-av" + (me && p === me.id ? " me" : "") + (x.cls ? " " + x.cls : "") },
+      say ? h("span", { class: "st-say" + (say.kind === "guess" ? " wrong" : say.kind === "hint" ? " hint" : ""), text: (say.kind === "guess" ? "✗ " : "") + say.text }) : null,
+      h("div", { class: "st-ph" }, photoBox(findMember(p) || {}), x.badge ? h("span", { class: "sk-badge" + (x.badgeCls ? " " + x.badgeCls : ""), text: x.badge }) : null),
+      h("span", { class: "st-name", text: nickOf(p) }),
+      x.sub != null ? h("span", { class: "st-sub", text: x.sub }) : null);
+  }));
+}
+/* keep bubbles inside the stage so nothing spills off the screen */
+function fitBubbles() {
+  document.querySelectorAll(".st-say").forEach(function (el) {
+    const box = el.closest(".stage"); if (!box) return;
+    el.style.setProperty("--dx", "0px");
+    const a = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    let dx = 0;
+    if (a.left < b.left) dx = b.left - a.left; else if (a.right > b.right) dx = b.right - a.right;
+    if (dx) el.style.setProperty("--dx", Math.round(dx) + "px");
+  });
 }
 function skAvatar(p, side, r, said) {
   const drawer = skDrawer(r), ok = (r.guessed || []).indexOf(p) >= 0, me = meMember();
@@ -3552,6 +3878,7 @@ function draw() {
   else if (r === "game-mafia") { tab = "games"; view = screenMafiaLobby(); }
   else if (r === "game-sketch") { tab = "games"; view = screenSketchLobby(); }
   else if (r === "game-smoke") { tab = "games"; view = screenSmokeLobby(); }
+  else if (r === "game-assoc") { tab = "games"; view = screenAssocLobby(); }
   else if (r.indexOf("room-") === 0) { tab = "games"; view = screenRoom(r.slice(5)); }
   else if (r === "guestbook") { tab = "guestbook"; view = screenGuestbook(); }
   else if (r === "cases") view = screenCases();
@@ -3567,7 +3894,17 @@ function draw() {
 
   const gate = S.membersReady && needsGate();
   tabbar.hidden = gate;
+  if (view.classList && view.classList.contains("room")) {
+    const dock = Array.prototype.find.call(view.children, function (c) { return c.classList.contains("dock"); });
+    if (dock) {
+      const col = h("div", { class: "room-main" });
+      Array.prototype.slice.call(view.children).forEach(function (c) { if (c !== dock) col.appendChild(c); });
+      view.replaceChildren(col, dock); view.classList.add("split");
+    }
+  }
+  document.body.classList.toggle("wide-room", r.indexOf("room-") === 0);
   main.replaceChildren(view);
+  requestAnimationFrame(fitBubbles);
   Object.keys(tabEls).forEach(function (k) { if (k === tab && !gate) tabEls[k].setAttribute("aria-current", "page"); else tabEls[k].removeAttribute("aria-current"); });
   opChip.hidden = !isBoss();
 
