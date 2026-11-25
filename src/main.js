@@ -1163,27 +1163,33 @@ function openPraiseEditor(pr) {
 }
 
 /* ----- screens ----- */
+function mtPinClear() { delete S.drafts["mt-pin"]; delete S.drafts["mt-pin2"]; MT.pinMsg = null; MT.pinBusy = false; }
 function mtPinForm(mode) {
-  const p1 = h("input", { type: "password", id: "mt-pin", inputmode: "numeric", maxlength: "4", autocomplete: "off", placeholder: "숫자 4자리" });
-  const p2 = mode === "join" ? h("input", { type: "password", id: "mt-pin2", inputmode: "numeric", maxlength: "4", autocomplete: "off", placeholder: "한 번 더" }) : null;
-  const msg = h("p", { class: "msg", role: "status" });
-  const btn = h("button", { type: "submit", class: "save", text: mode === "join" ? "비밀번호 정하고 참가하기" : "들어가기" });
+  // 화면이 새로 그려져도(다른 조직원 참가, 5초 갱신) 입력한 번호와 안내 문구가 지워지지 않게 저장해 둬요.
+  const p1 = draft("input", "mt-pin", { type: "password", inputmode: "numeric", maxlength: "4", autocomplete: "off", placeholder: "숫자 4자리" });
+  const p2 = mode === "join" ? draft("input", "mt-pin2", { type: "password", inputmode: "numeric", maxlength: "4", autocomplete: "off", placeholder: "한 번 더" }) : null;
+  const pm = MT.pinMsg || { cls: "msg", text: "" };
+  const msg = h("p", { class: pm.cls, role: "status", text: pm.text });
+  const btn = h("button", { type: "submit", class: "save", disabled: !!MT.pinBusy, text: mode === "join" ? "비밀번호 정하고 참가하기" : "들어가기" });
+  function say(cls, text) { MT.pinMsg = { cls: cls, text: text }; msg.className = cls; msg.textContent = text; }
   const f = h("form", { class: "panel", novalidate: true },
     h("div", { class: "field-label", text: mode === "join" ? "마니또 비밀번호 정하기" : "마니또 비밀번호" }),
     h("p", { class: "note", text: mode === "join" ? "내 마니또와 칭찬 일지를 지키는 번호예요. 다른 폰에서 들어올 때도 이 번호를 써요. 잊으면 두목에게 참가 취소를 부탁해야 해요." : "참가할 때 정한 숫자 4자리를 넣어 주세요." }),
     p1, p2, msg, btn,
-    h("button", { type: "button", class: "link-btn", onclick: function () { MT.pinMode = null; render(); }, text: "취소" }));
+    h("button", { type: "button", class: "link-btn", onclick: function () { mtPinClear(); MT.pinMode = null; render(); }, text: "취소" }));
   f.addEventListener("submit", async function (ev) {
     ev.preventDefault();
-    const a = p1.value.trim();
-    if (!/^\d{4}$/.test(a)) { msg.className = "msg err"; msg.textContent = "숫자 4자리로 넣어 주세요."; return; }
-    if (p2 && p2.value.trim() !== a) { msg.className = "msg err"; msg.textContent = "두 번 넣은 번호가 달라요."; return; }
-    btn.disabled = true; msg.className = "msg"; msg.textContent = "확인 중…";
+    if (MT.pinBusy) return;
+    const a = (S.drafts["mt-pin"] || p1.value || "").trim();
+    const b = p2 ? (S.drafts["mt-pin2"] || p2.value || "").trim() : a;
+    if (!/^\d{4}$/.test(a)) { say("msg err", "숫자 4자리로 넣어 주세요."); return; }
+    if (b !== a) { say("msg err", "두 번 넣은 번호가 달라요."); return; }
+    MT.pinBusy = true; btn.disabled = true; say("msg", "확인 중…");
     try {
       if (mode === "join") { await mtJoin(a); toast("마니또에 참가했어요! 🎄"); }
       else { await mtLogin(a); toast("들어왔어요."); }
-      MT.pinMode = null; render();
-    } catch (e) { btn.disabled = false; msg.className = "msg err"; msg.textContent = mtAuthError(e); }
+      mtPinClear(); MT.pinMode = null; render();
+    } catch (e) { MT.pinBusy = false; say("msg err", mtAuthError(e)); render(); }
   });
   return f;
 }
@@ -1225,8 +1231,8 @@ function screenManito() {
     parts.push(mtHeader("참가 신청 중이에요. 참가 " + playerList.length + "명"), h("div", { class: "field" }, h("div", { class: "field-label", text: "참가자" }), playerList.length ? roster : h("p", { class: "note", text: "아직 아무도 없어요." })));
     if (!me) parts.push(h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." }));
     else if (MT.pinMode) parts.push(mtPinForm(MT.pinMode));
-    else if (!joined) parts.push(h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "join"; render(); }, text: "🎁 참가 신청하기" }));
-    else if (!authed) parts.push(h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" }));
+    else if (!joined) parts.push(h("button", { type: "button", class: "save", onclick: function () { mtPinClear(); MT.pinMode = "join"; render(); }, text: "🎁 참가 신청하기" }));
+    else if (!authed) parts.push(h("button", { type: "button", class: "save", onclick: function () { mtPinClear(); MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" }));
     else parts.push(h("div", { class: "panel" }, h("p", { text: "참가 완료! 두목이 마감하면 마니또를 뽑을 수 있어요." })));
     if (boss) parts.push(h("div", { class: "panel" }, h("div", { class: "field-label", text: "두목 전용" }),
       h("button", { type: "button", class: "save", onclick: mtCloseSignup, text: "참가 마감하고 뽑기 시작" }),
@@ -1245,7 +1251,7 @@ function screenManito() {
     if (!isPlayer) parts.push(h("div", { class: "empty", text: "이번 마니또 참가자가 아니에요. 크리스마스에 공개되는 배정표를 기다려 주세요." }));
     else if (MT.pinMode) parts.push(mtPinForm(MT.pinMode));
     else if (!authed) parts.push(h("div", { class: "panel" }, h("p", { text: "내 마니또와 칭찬 일지를 보려면 비밀번호가 필요해요." }),
-      h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" })));
+      h("button", { type: "button", class: "save", onclick: function () { mtPinClear(); MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" })));
     else if (!MT.secret) parts.push(h("div", { class: "panel mt-draw" },
       h("p", { text: "몰래 챙겨줄 사람을 뽑아요. 결과는 나만 볼 수 있어요." }),
       h("button", { type: "button", class: "save", disabled: MT.busy, onclick: mtDraw, text: MT.busy ? "뽑는 중…" : "🎁 마니또 뽑기" })));
@@ -1298,7 +1304,7 @@ function screenManito() {
   const guessOf = {}; MT.guesses.forEach(function (x) { guessOf[x.id] = x.guess; });
   parts.push(mtHeader("정체 공개! 🎄 메리 크리스마스"));
   if (isPlayer && !authed && !MT.pinMode) parts.push(h("div", { class: "panel" }, h("p", { text: "내가 받은 칭찬을 보려면 비밀번호로 들어와 주세요." }),
-    h("button", { type: "button", class: "save", onclick: function () { MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" })));
+    h("button", { type: "button", class: "save", onclick: function () { mtPinClear(); MT.pinMode = "login"; render(); }, text: "비밀번호로 들어가기" })));
   else if (isPlayer && MT.pinMode) parts.push(mtPinForm(MT.pinMode));
   if (isPlayer) {
     const giver = giverOf[me.id], gm = giver && (findMember(giver) || { nick: nickOf(giver) });
