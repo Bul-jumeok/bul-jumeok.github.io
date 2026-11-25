@@ -76,7 +76,16 @@ function h(tag, attrs) {
     }
   }
   for (let i = 2; i < arguments.length; i++) append(el, arguments[i]);
+  if (tag === "details") keepOpenState(el);
   return el;
+}
+/* 화면이 다시 그려져도 펼친 접기 상자가 닫히지 않게 기억 */
+const DETAILS_OPEN = new Map();
+function keepOpenState(el) {
+  const sm = el.querySelector("summary");
+  const key = (location.hash || "#hq") + "|" + (sm ? sm.textContent : "");
+  if (DETAILS_OPEN.has(key)) el.open = DETAILS_OPEN.get(key);
+  el.addEventListener("toggle", function () { DETAILS_OPEN.set(key, el.open); });
 }
 function append(el) {
   for (let i = 1; i < arguments.length; i++) {
@@ -1344,15 +1353,75 @@ function screenHQ() {
         go(open.length === 1 ? "room-" + open[0].id : open.length ? "rooms" : "games");
       } }, h("b", { text: String(openRooms) }), h("span", { text: "열린 게임방 →" })),
       h("button", { type: "button", class: "led", onclick: function () { go("guestbook"); } }, h("b", { text: String(S.guest.length) }), h("span", { text: "방명록 →" }))),
-    h("details", { class: "guide" },
-      h("summary", { text: "본부를 홈 화면에 두는 법" }),
-      h("div", { class: "guide-body" },
-        h("div", null, h("h3", { text: "아이폰 (Safari)" }),
-          h("ol", null, h("li", { text: "이 주소를 Safari로 엽니다." }), h("li", { text: "아래쪽 공유 버튼(네모에 화살표)을 누릅니다." }), h("li", { text: "‘홈 화면에 추가’를 누릅니다." }))),
-        h("div", null, h("h3", { text: "안드로이드 (Chrome)" }),
-          h("ol", null, h("li", { text: "이 주소를 Chrome으로 엽니다." }), h("li", { text: "오른쪽 위 ⋮ 메뉴를 누릅니다." }), h("li", { text: "‘홈 화면에 추가’ 또는 ‘앱 설치’를 누릅니다." }))))),
+    installPanel(),
     bossPanel()
   );
+}
+/* ---------- 앱 설치 (컴퓨터 + 폰) ---------- */
+const INSTALL = { evt: null, done: false };
+const UA = navigator.userAgent || "";
+const IS_IOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const IS_ANDROID = /Android/.test(UA);
+const IS_MOBILE = IS_IOS || IS_ANDROID;
+const IS_MAC = !IS_IOS && /Macintosh|Mac OS X/.test(UA);
+const IS_SAFARI = /Safari/.test(UA) && !/Chrome|Chromium|CriOS|Edg|OPR|SamsungBrowser|Whale/.test(UA);
+const IS_EDGE = /Edg\//.test(UA);
+const IS_WHALE = /Whale/.test(UA);
+function isStandalone() {
+  try { return window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: window-controls-overlay)").matches || navigator.standalone === true; } catch (e) { return false; }
+}
+window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INSTALL.evt = e; render(); });
+window.addEventListener("appinstalled", function () { INSTALL.evt = null; INSTALL.done = true; toast("비밀본부 앱을 설치했어요!"); render(); });
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+}
+async function runInstall() {
+  const e = INSTALL.evt; if (!e) return;
+  INSTALL.evt = null;
+  try { e.prompt(); const r = await e.userChoice; if (r && r.outcome === "accepted") INSTALL.done = true; } catch (err) {}
+  render();
+}
+function installSteps() {
+  const pc = h("div", null, h("h3", { text: "컴퓨터 (Chrome · Edge · 웨일)" }),
+    h("ol", null,
+      h("li", { text: "이 주소를 Chrome, Edge 또는 웨일로 엽니다." }),
+      h("li", { text: "주소창 오른쪽 끝의 설치 아이콘(모니터에 ↓ 모양)을 누릅니다." }),
+      h("li", { text: "안 보이면 오른쪽 위 메뉴(⋮ 또는 ⋯)에서 ‘앱 설치’ · ‘이 사이트를 앱으로 설치’ · ‘페이지를 앱으로 설치’를 찾습니다." }),
+      h("li", { text: "‘설치’를 누르면 바탕화면과 시작 메뉴(맥은 Launchpad)에 비밀본부가 생깁니다." })));
+  const mac = h("div", null, h("h3", { text: "맥 (Safari)" }),
+    h("ol", null,
+      h("li", { text: "이 주소를 Safari로 엽니다." }),
+      h("li", { text: "위쪽 메뉴에서 ‘파일’ → ‘Dock에 추가…’를 누릅니다. (macOS Sonoma 이상)" }),
+      h("li", { text: "‘추가’를 누르면 Dock과 응용 프로그램 폴더에 비밀본부가 생깁니다." })));
+  const ios = h("div", null, h("h3", { text: "아이폰 (Safari)" }),
+    h("ol", null, h("li", { text: "이 주소를 Safari로 엽니다." }), h("li", { text: "아래쪽 공유 버튼(네모에 화살표)을 누릅니다." }), h("li", { text: "‘홈 화면에 추가’를 누릅니다." })));
+  const and = h("div", null, h("h3", { text: "안드로이드 (Chrome)" }),
+    h("ol", null, h("li", { text: "이 주소를 Chrome으로 엽니다." }), h("li", { text: "오른쪽 위 ⋮ 메뉴를 누릅니다." }), h("li", { text: "‘앱 설치’ 또는 ‘홈 화면에 추가’를 누릅니다." })));
+  const order = IS_IOS ? [ios, and, pc, mac] : IS_ANDROID ? [and, ios, pc, mac] : IS_MAC && IS_SAFARI ? [mac, pc, ios, and] : [pc, mac, ios, and];
+  return order;
+}
+function installPanel() {
+  if (isStandalone() || INSTALL.done) {
+    return h("div", { class: "install installed" },
+      h("span", { class: "eyebrow", text: "앱 설치" }),
+      h("p", { text: INSTALL.done && !isStandalone() ? "설치 완료! 이제 바탕화면 · 시작 메뉴(폰은 홈 화면)의 ‘비밀본부’로 바로 들어올 수 있어요." : "설치된 비밀본부 앱으로 접속 중이에요." }));
+  }
+  const where = IS_MOBILE ? "폰 홈 화면" : "컴퓨터";
+  const canPrompt = !!INSTALL.evt;
+  const safariMacNote = IS_MAC && IS_SAFARI ? "Safari는 위쪽 메뉴 ‘파일 → Dock에 추가…’로 설치해요." : "";
+  return h("div", { class: "install" },
+    h("div", { class: "install-head" },
+      h("img", { src: "icon-192.png", alt: "", class: "install-icon" }),
+      h("div", null,
+        h("span", { class: "eyebrow", text: "앱 설치 · 무료" }),
+        h("b", { text: "비밀본부를 " + where + "에 설치하기" }),
+        h("small", { text: IS_MOBILE ? "앱처럼 아이콘 한 번에 들어와요." : "윈도우 · 맥 모두 돼요. 바탕화면 아이콘으로 창 하나에서 바로 열려요." }))),
+    canPrompt
+      ? h("button", { type: "button", class: "save", onclick: runInstall, text: IS_MOBILE ? "📥 앱 설치하기" : "💻 컴퓨터에 설치하기" })
+      : safariMacNote ? h("p", { class: "note", text: safariMacNote }) : null,
+    h("details", { class: "guide", open: !canPrompt && !safariMacNote ? "" : null },
+      h("summary", { text: canPrompt ? "다른 기기에 설치하는 법" : "설치하는 법" }),
+      h("div", { class: "guide-body" }, installSteps())));
 }
 function isGoogleUser(u) { return !!(u && (u.providerData || []).some(function (p) { return p.providerId === "google.com"; })); }
 function bossPanel() {

@@ -397,3 +397,15 @@ img { max-width: 100%; }
 .mt-table .arrow { color: var(--red); font-family: var(--font-mono); }
 .mt-table b { text-align: right; }
 .form input[type="password"], .panel input[type="password"] { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 11px 12px; font-size: 20px; letter-spacing: 0.4em; color: var(--fg); }
+
+/* 앱 설치 */
+.install { border: 1px solid var(--line); background: var(--surface); padding: 14px; display: grid; gap: 12px; grid-template-columns: minmax(0,1fr); }
+.install.installed { gap: 4px; }
+.install.installed p { font-size: 14px; color: var(--muted); margin: 0; }
+.install-head { display: flex; gap: 12px; align-items: center; }
+.install-head > div { display: grid; gap: 2px; min-width: 0; }
+.install-head b { font-size: 16px; }
+.install-head small { color: var(--muted); font-size: 13px; }
+.install-icon { width: 48px; height: 48px; border-radius: 12px; flex: none; border: 1px solid var(--line); }
+.install details.guide { border-color: var(--line); background: transparent; }
+.install .note { margin: 0; }
