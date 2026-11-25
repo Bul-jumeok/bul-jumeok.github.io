@@ -482,8 +482,13 @@ function sfxRoom(a, b) {
     if (st && b.status === "result") { later("fanfare", 400); later("laugh", 1700); later("cry", 2700); }
   } else if (b.type === "smoke") {
     if (st && b.status === "play") sfx("go");
-    else if (st && b.status === "shot") { sfx("cock"); later("bang", 320); }
-    else if (st && b.status === "result") { sfx("bang"); later("fanfare", 700); later("laugh", 2000); later("cry", 3000); }
+    else if (st && b.status === "shot") { sfx("cock"); (b.shots && b.shots.length ? b.shots : [1]).forEach(function (_, i) { later("bang", 320 + i * 350); }); }
+    else if (st && b.status === "result") {
+      const n = (b.shots && b.shots.length) || 1;
+      for (let i = 0; i < n; i++) later("bang", i * 350);
+      const t = n * 350;
+      later(b.winner ? "fanfare" : "ominous", t + 400); later("laugh", t + 1700); later("cry", t + 2700);
+    }
   } else {
     if (st && b.status === "hint" && a.status === "lobby") sfx("flip");
     if (b.status === "hint" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) later("ding", st ? 350 : 0);
@@ -933,11 +938,30 @@ function cmtSweep() {
   Object.keys(CMTS).forEach(function (k) { if (!CMT_WANT[k]) { try { CMTS[k].unsub(); } catch (e) {} delete CMTS[k]; } });
   CMT_WANT = {};
 }
+/* anonymous comments keep no name or account; this phone only remembers which ones it wrote */
+function myAnon() { try { return JSON.parse(localStorage.getItem("bf-myanon") || "[]"); } catch (e) { return []; } }
+function addMyAnon(id) { try { const a = myAnon(); a.push(id); localStorage.setItem("bf-myanon", JSON.stringify(a.slice(-300))); } catch (e) {} }
 function commentsBox(path, opts) {
   opts = opts || {};
-  const c = cmtStore(path), me = meMember(), key = "cmt-" + path.replace("/", "-");
+  const c = cmtStore(path), me = meMember(), key = "cmt-" + path.replace("/", "-"), anon = !!opts.anon, mineAnon = anon ? myAnon() : [];
   const list = c.list.length
-    ? h("ul", { class: "gb-list cmt-list" }, c.list.map(function (x) {
+    ? h("ul", { class: "gb-list cmt-list" }, c.list.map(function (x, i) {
+        if (anon) {
+          return h("li", { class: "gb-item anon" },
+            h("div", { class: "gb-photo anon-face", text: "🕵️" }),
+            h("div", { class: "gb-body" },
+              h("div", { class: "gb-meta" }, h("b", { text: "익명 " + (i + 1) }), mineAnon.indexOf(x.id) >= 0 ? h("span", { class: "gb-rank", text: "내 댓글" }) : null,
+                h("span", { class: "gb-time", text: timeAgo(x.createdAt) })),
+              h("p", { class: "gb-text", text: x.text }),
+              isBoss() ? (c.confirm === x.id
+                ? h("div", { class: "gb-del" }, h("span", { text: "지울까요?" }),
+                    h("button", { type: "button", class: "link-btn", onclick: function () { c.confirm = null; render(); }, text: "취소" }),
+                    h("button", { type: "button", class: "link-btn danger", onclick: async function () {
+                      const parts = path.split("/");
+                      try { await deleteDoc(doc(db, parts[0], parts[1], "comments", x.id)); c.confirm = null; } catch (e) { toast(errText(e)); }
+                    }, text: "지우기" }))
+                : h("button", { type: "button", class: "link-btn quiet", onclick: function () { c.confirm = x.id; render(); }, text: "지우기" })) : null));
+        }
         const m = findMember(x.memberId);
         const mine = S.user && x.uid === S.user.uid;
         return h("li", { class: "gb-item" },
@@ -957,7 +981,24 @@ function commentsBox(path, opts) {
       }))
     : h("p", { class: "note", text: !c.ready ? "댓글을 불러오는 중…" : c.denied ? "댓글 기능을 준비 중이에요. 두목이 보안 규칙을 업데이트하면 열려요." : (opts.empty || "아직 댓글이 없어요.") });
   let form = null;
-  if (!c.denied) {
+  if (!c.denied && anon) {
+    const ta = draft("textarea", key, { class: "gb-in cmt-in", maxlength: "300", placeholder: opts.placeholder || "익명으로 댓글 달기" });
+    form = h("form", { class: "cmt-form", novalidate: true },
+      h("div", { class: "field-label", text: "🕵️ 익명으로 댓글 달기" }), ta,
+      h("p", { class: "hint", text: "이름도 계정도 저장되지 않아요. 그래서 한 번 단 익명 댓글은 두목만 지울 수 있어요." }),
+      h("button", { type: "submit", class: "save", disabled: !S.user, text: "익명 댓글 달기" }));
+    form.addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      const t = (S.drafts[key] || ta.value || "").trim();
+      if (!t || !S.user) return;
+      const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+      const parts = path.split("/");
+      try {
+        const ref = await addDoc(collection(db, parts[0], parts[1], "comments"), { text: t.slice(0, 300), createdAt: serverTimestamp() });
+        addMyAnon(ref.id); S.drafts[key] = ""; sfx("pop"); render();
+      } catch (e) { btn.disabled = false; toast(errText(e)); }
+    });
+  } else if (!c.denied) {
     if (!me) form = h("p", { class: "note", text: "댓글은 신원을 고른 조직원만 달 수 있어요. 본부에서 ‘신원 변경’으로 나를 골라 주세요." });
     else {
       const ta = draft("textarea", key, { class: "gb-in cmt-in", maxlength: "300", placeholder: opts.placeholder || "댓글 달기" });
@@ -1210,7 +1251,7 @@ function screenTips() {
         t.public ? h("button", { type: "button", class: "link-btn cmt-toggle", "aria-expanded": S.tipOpen && S.tipOpen[t.id] ? "true" : "false",
           onclick: function () { S.tipOpen = S.tipOpen || {}; S.tipOpen[t.id] = !S.tipOpen[t.id]; render(); },
           text: "💬 댓글 " + cmtCount("tips/" + t.id) + (S.tipOpen && S.tipOpen[t.id] ? " 접기" : "") }) : null,
-        t.public && S.tipOpen && S.tipOpen[t.id] ? commentsBox("tips/" + t.id, { compact: true, placeholder: "이 제보에 한마디 (목격담, 해명, 반박…)", empty: "아직 댓글이 없어요." }) : null,
+        t.public && S.tipOpen && S.tipOpen[t.id] ? commentsBox("tips/" + t.id, { compact: true, anon: true, placeholder: "이 제보에 익명으로 한마디 (목격담, 해명, 반박…)", empty: "아직 댓글이 없어요." }) : null,
         boss ? h("div", { class: "gb-del" },
           h("button", { type: "button", class: "link-btn", onclick: async function () { try { await updateDoc(doc(db, "tips", t.id), { public: !t.public }); } catch (e) { toast(errText(e)); } }, text: t.public ? "숨기기" : "공개하기" }),
           h("button", { type: "button", class: "link-btn danger", onclick: async function () { try { await deleteDoc(doc(db, "tips", t.id)); } catch (e) { toast(errText(e)); } }, text: "삭제" })) : null);
@@ -1777,7 +1818,7 @@ const GAMES = [
   { id: "yut", code: "G-03", name: "윷놀이", desc: "도·개·걸·윷·모로 가리는 본부 서열.", ready: false },
   { id: "liar", code: "G-04", name: "라이어", desc: "혼자만 제시어를 모르는 사람을 찾아라.", ready: true },
   { id: "sketch", code: "G-05", name: "드로잉퀴즈", desc: "한 명은 그리고, 나머지는 맞혀라.", ready: true },
-  { id: "smoke", code: "G-06", name: "빨리 담배피기", desc: "들숨 날숨 타이밍 싸움. 꼴찌는 킬러가 처리한다.", ready: true },
+  { id: "smoke", code: "G-06", name: "빨리 담배피기", desc: "들숨 날숨 타이밍 싸움. 다 못 피우면 킬러가 처리한다.", ready: true },
   { id: "manito", code: "G-07", name: "크리스마스 마니또", desc: "몰래 칭찬하고, 크리스마스에 정체 공개.", ready: true }
 ];
 const GAME_NAME = { liar: "라이어", mafia: "마피아", sketch: "드로잉퀴즈", smoke: "빨리 담배피기", assoc: "연상퀴즈" };
@@ -2073,7 +2114,7 @@ setInterval(function () {
   }
 }, 500);
 async function backToLobby() {
-  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false, board: [], shot: null, round: 0, rk: 0, out: [], cur: null, qn: 0, solved: [], tries: {}, pts: {} });
+  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false, board: [], shot: null, shots: [], round: 0, rk: 0, out: [], cur: null, qn: 0, solved: [], tries: {}, pts: {} });
 }
 
 function screenRoom(id) {
@@ -3752,7 +3793,7 @@ async function smStart() {
       const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 2) throw { code: "few" };
       const game = (r.game || 0) + 1;
-      sysMsg(tx, { game: game }, "🚬 빨리 담배피기 시작! 꼴찌는 킬러가 처리합니다.");
+      sysMsg(tx, { game: game }, "🚬 빨리 담배피기 시작! 40초 안에 다 못 피우면 킬러가 처리합니다.");
       tx.update(roomRef(), nextPhase(r, { status: "ready", lineup: lineup, alive: lineup, out: [], round: 1, rk: game * 100 + 1, board: [], shot: null, winner: null, game: game, startedAt: serverTimestamp() }));
     });
   } catch (e) {
@@ -3786,15 +3827,21 @@ async function smEndRound(force, expectPhase) {
       if (a.done) return a.fin - b.fin;
       return b.prog - a.prog || (a.m < b.m ? -1 : 1);
     });
-    const loser = st[st.length - 1].m;
-    const left = alive.filter(function (m) { return m !== loser; });
-    const out = (r.out || []).concat([loser]);
-    sysMsg(tx, r, "💥 탕! " + r.round + "라운드 꼴찌 " + nickOf(loser) + "님 탈락.");
-    if (left.length <= 1) {
+    /* everyone who didn't finish in time is shot; if all finished, the slowest one is */
+    const failed = st.filter(function (x) { return !x.done; }).map(function (x) { return x.m; }).reverse();
+    const losers = failed.length ? failed : [st[st.length - 1].m];
+    const left = alive.filter(function (m) { return losers.indexOf(m) < 0; });
+    const out = (r.out || []).concat(losers);
+    if (failed.length) sysMsg(tx, r, "💥 탕" + (losers.length > 1 ? "탕탕" : "") + "! " + r.round + "라운드 시간 안에 못 피운 " + losers.map(nickOf).join(", ") + "님 처형.");
+    else sysMsg(tx, r, "💥 탕! " + r.round + "라운드 모두 다 피웠지만 제일 늦은 " + nickOf(losers[0]) + "님 탈락.");
+    if (left.length === 0) {
+      sysMsg(tx, r, "☠️ 전원 사망… 킬러만 웃는다.");
+      tx.update(ref, nextPhase(r, { status: "result", alive: [], out: out, board: st, shot: losers[0], shots: losers, winner: null }));
+    } else if (left.length === 1) {
       sysMsg(tx, r, "👑 최후의 1인 " + nickOf(left[0]) + "! 모두 무릎 꿇어라.");
-      tx.update(ref, nextPhase(r, { status: "result", alive: left, out: out, board: st, shot: loser, winner: left[0] || null }));
+      tx.update(ref, nextPhase(r, { status: "result", alive: left, out: out, board: st, shot: losers[0], shots: losers, winner: left[0] }));
     } else {
-      tx.update(ref, nextPhase(r, { status: "shot", alive: left, out: out, board: st, shot: loser, line: KILLER_LINES[Math.floor(Math.random() * KILLER_LINES.length)] }));
+      tx.update(ref, nextPhase(r, { status: "shot", alive: left, out: out, board: st, shot: losers[0], shots: losers, line: KILLER_LINES[Math.floor(Math.random() * KILLER_LINES.length)] }));
     }
   });
 }
@@ -3804,7 +3851,7 @@ async function smNextRound(expectPhase) {
     if (!r || r.status !== "shot" || (expectPhase != null && r.phase !== expectPhase)) return;
     const round = (r.round || 1) + 1;
     sysMsg(tx, r, "🚬 " + round + "라운드! 남은 사람 " + (r.alive || []).length + "명.");
-    tx.update(roomRef(), nextPhase(r, { status: "ready", round: round, rk: (r.game || 0) * 100 + round, board: [], shot: null }));
+    tx.update(roomRef(), nextPhase(r, { status: "ready", round: round, rk: (r.game || 0) * 100 + round, board: [], shot: null, shots: [] }));
   });
 }
 function smokeTimeout(r) {
@@ -3970,7 +4017,7 @@ function screenSmokeLobby() {
     h("button", { class: "back", type: "button", onclick: function () { go("games"); }, text: "게임방으로" }),
     h("div", { class: "sec-head" },
       h("div", null, h("span", { class: "eyebrow", text: "G-06" }), h("h2", { text: "빨리 담배피기" }),
-        h("p", { text: "들숨 날숨 타이밍 싸움. 라운드마다 꼴찌는 킬러가 처리하고, 최후의 1인이 형님이 된다." }))),
+        h("p", { text: "들숨 날숨 타이밍 싸움. 다 못 피우면 킬러가 처리하고, 최후의 1인이 형님이 된다." }))),
     h("button", { type: "button", class: "save", disabled: !me || !S.user, onclick: function () { createRoom("smoke"); } },
       me ? "새 방 만들기" : "신원을 고른 조직원만 방을 만들 수 있어요"),
     h("div", { class: "field" }, h("div", { class: "field-label", text: "열린 방" }), list),
@@ -3981,8 +4028,9 @@ function screenSmokeLobby() {
           h("li", { text: "버튼을 꾹 누르고 있으면 들숨, 떼면 날숨이에요. 들이마시는 동안만 담배가 타요." }),
           h("li", { text: "숨이 얼마나 찼는지는 화면에 안 나와요. 들이마시는 소리가 높아질수록 꽉 찬 거예요. 깊게 마실수록 더 빨리 타지만, 너무 오래 마시면 콜록콜록! 3.5초 동안 못 피우고 담배도 조금 날아가요." }),
           h("li", { text: "떼면 ‘후~’ 하고 내쉬어요. 그 소리가 끝나기 전에 또 누르면 덜 내쉰 만큼 기침할 확률이 커져요. 소리를 잘 듣고 감으로 리듬을 타세요." }),
-          h("li", { text: "한 개비를 먼저 다 피운 순서대로 순위가 정해져요. 40초 안에 못 피우면 많이 피운 순서예요." }),
-          h("li", { text: "라운드마다 꼴찌는 킬러에게 탕! 마지막 1인이 남을 때까지 계속해요." })))));
+          h("li", { text: "40초 안에 한 개비를 다 못 피우면 킬러에게 탕! 못 피운 사람은 전부 죽어요." }),
+          h("li", { text: "모두 다 피웠으면 제일 늦게 피운 한 명이 탈락해요. 마지막 1인이 남을 때까지 계속해요." }),
+          h("li", { text: "다 같이 못 피우면 전원 사망… 킬러의 승리예요." })))));
 }
 function screenSmokeRoom(r) {
   const back = h("button", { class: "back", type: "button", onclick: function () { go("game-smoke"); }, text: "빨리 담배피기 방 목록" });
@@ -3991,7 +4039,7 @@ function screenSmokeRoom(r) {
   const inRoom = me && players.indexOf(me.id) >= 0;
   const playing = r.status !== "lobby";
   smWatch(playing ? r.rk : null);
-  const title = r.status === "lobby" ? "대기 중" : r.status === "result" ? "최후의 1인" : r.round + "라운드" + (r.status === "ready" ? " 준비" : r.status === "shot" ? " 처형" : "");
+  const title = r.status === "lobby" ? "대기 중" : r.status === "result" ? (r.winner ? "최후의 1인" : "전원 사망") : r.round + "라운드" + (r.status === "ready" ? " 준비" : r.status === "shot" ? " 처형" : "");
   const head = h("div", { class: "room-head" },
     h("div", null, h("span", { class: "eyebrow", text: "빨리 담배피기 · " + nickOf(r.createdBy) + "의 방" }), h("h2", { text: title })),
     playing ? h("span", { class: "mode-chip", text: "생존 " + (r.alive || []).length + "명" }) : null);
@@ -4001,7 +4049,7 @@ function screenSmokeRoom(r) {
     body = h("div", { class: "panel" },
       h("div", { class: "field-label", text: "모인 사람 " + n + "명" }),
       h("div", { class: "chips" }, players.map(function (p) { return h("span", { class: "chip static" + (me && p === me.id ? " me" : ""), text: nickOf(p) }); })),
-      h("p", { class: "note", text: "라운드마다 꼴찌 한 명이 탈락해요. " + Math.max(1, n - 1) + "라운드면 최후의 1인이 나와요." }),
+      h("p", { class: "note", text: "40초 안에 다 못 피우면 전부 킬러에게 처형! 모두 다 피웠으면 제일 늦은 한 명이 탈락해요." }),
       !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
         : inRoom
           ? h("div", { class: "op-row" },
@@ -4014,20 +4062,26 @@ function screenSmokeRoom(r) {
       timerEl(r, r.status === "ready" ? "시작까지" : "남은 시간")), smStageFor(r)];
     if (r.status === "play") smLoop();
   } else if (r.status === "shot") {
-    const loser = findMember(r.shot) || { nick: nickOf(r.shot) };
+    const shots = r.shots && r.shots.length ? r.shots : [r.shot];
     body = h("div", { class: "panel shot" },
-      h("div", { class: "shot-scene" },
+      h("div", { class: "shot-scene" + (shots.length > 1 ? " many" : "") },
         h("div", { class: "killer", "aria-hidden": "true" },
           h("span", { class: "k-man", text: "🕴️" }), h("span", { class: "k-gun", text: "🔫" }), h("span", { class: "k-flash", text: "💥" })),
         h("span", { class: "bullet", "aria-hidden": "true" }),
-        h("div", { class: "victim" }, h("span", { class: "bang", text: "탕!" }), h("div", { class: "v-photo" }, photoBox(loser)))),
+        h("div", { class: "victims" }, shots.map(function (id, i) {
+          const v = findMember(id) || { nick: nickOf(id) };
+          const el = h("div", { class: "victim" }, h("span", { class: "bang", text: "탕!" }), h("div", { class: "v-photo" }, photoBox(v)));
+          el.style.setProperty("--d", (i * 0.35) + "s");
+          return el;
+        }))),
       h("p", { class: "shot-line" }, "킬러: “" + (r.line || KILLER_LINES[0]) + "”"),
-      h("p", null, h("b", { text: loser.nick }), "님 탈락."),
+      h("p", null, h("b", { text: shots.map(nickOf).join(", ") }), "님 탈락.", shots.length > 1 ? h("small", { class: "note", text: " (시간 안에 못 피움)" }) : null),
       smBoard(r), timerEl(r, "다음 라운드까지"));
   } else {
     const w = findMember(r.winner) || { nick: nickOf(r.winner) };
     body = h("div", { class: "panel result-smoke" },
-      ceremony(r.winner, (r.out || []).slice().reverse(), "최후의 1인 · 오늘의 형님"),
+      r.winner ? ceremony(r.winner, (r.out || []).slice().reverse(), "최후의 1인 · 오늘의 형님")
+        : ceremony(null, (r.out || []).slice().reverse(), "전원 사망 · 킬러의 승리", null, { emoji: "🕴️", name: "킬러" }),
       h("div", { class: "op-row" },
         h("button", { type: "button", onclick: function () { go("game-smoke"); }, text: "방 목록" }),
         h("button", { type: "button", class: "go", onclick: backToLobby, text: "같은 방에서 한 판 더" })));
@@ -4036,12 +4090,13 @@ function screenSmokeRoom(r) {
 }
 /* ending: the winner laughs, everyone else kneels and cries */
 const CRY_LINES = ["엉엉 😭", "형님… 😭", "흑흑 😢", "으앙 😭", "억울해 😭", "다음엔 꼭… 😢"];
-function ceremony(winnerId, others, title, extra) {
-  const w = findMember(winnerId) || { nick: nickOf(winnerId) };
+function ceremony(winnerId, others, title, extra, stand) {
+  const w = stand ? { nick: stand.name } : (findMember(winnerId) || { nick: nickOf(winnerId) });
   return h("div", { class: "ceremony" },
     h("div", { class: "winner laughing" },
       h("span", { class: "w-say", text: "음하하하하! 😆" }),
-      h("span", { class: "crown", "aria-hidden": "true", text: "👑" }), h("div", { class: "w-photo" }, photoBox(w)),
+      h("span", { class: "crown", "aria-hidden": "true", text: stand ? "🔫" : "👑" }),
+      stand ? h("div", { class: "w-photo w-emoji", text: stand.emoji }) : h("div", { class: "w-photo" }, photoBox(w)),
       h("div", { class: "w-name", text: w.nick }), h("div", { class: "eyebrow", text: title || "오늘의 형님" }), extra || null),
     others.length ? h("div", { class: "kneel" }, others.map(function (m, i) {
       const mm = findMember(m) || { nick: nickOf(m) };
@@ -4053,7 +4108,7 @@ function ceremony(winnerId, others, title, extra) {
 }
 function smBoard(r) {
   return h("ol", { class: "sm-board" }, (r.board || []).map(function (x) {
-    return h("li", { class: x.m === r.shot ? "dead" : "" }, h("span", { text: nickOf(x.m) }),
+    return h("li", { class: (r.shots || [r.shot]).indexOf(x.m) >= 0 ? "dead" : "" }, h("span", { text: nickOf(x.m) }),
       h("b", { text: x.done ? (x.fin / 1000).toFixed(1) + "초" : x.prog + "%" }));
   }));
 }

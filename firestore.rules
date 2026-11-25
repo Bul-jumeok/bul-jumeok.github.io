@@ -113,16 +113,14 @@ service cloud.firestore {
         && request.resource.data.public == false
         && shortText(request.resource.data.text, 300);
       allow update, delete: if isBoss();
-      // comments on published tips, under each member's own sign-in
+      // anonymous comments on published tips: no name or account is stored, so only the boss can delete them
       match /comments/{cid} {
         allow read: if get(/databases/$(database)/documents/tips/$(id)).data.public == true || isBoss();
         allow create: if signedIn()
           && get(/databases/$(database)/documents/tips/$(id)).data.public == true
-          && request.resource.data.keys().hasOnly(['uid', 'memberId', 'nick', 'text', 'createdAt'])
-          && request.resource.data.uid == request.auth.uid
-          && shortText(request.resource.data.text, 300)
-          && shortText(request.resource.data.nick, 30);
-        allow delete: if isBoss() || (signedIn() && resource.data.uid == request.auth.uid);
+          && request.resource.data.keys().hasOnly(['text', 'createdAt'])
+          && shortText(request.resource.data.text, 300);
+        allow delete: if isBoss();
       }
     }
     match /liarTopics/{id} {

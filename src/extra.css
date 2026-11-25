@@ -627,3 +627,14 @@ img { max-width: 100%; }
 .cmt-toggle { justify-self: start; margin-top: 2px; font-size: 13px; }
 .cmt.compact { padding: 8px 0 0 10px; border-left: 2px solid var(--line); margin-top: 4px; }
 .cmt-form { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+/* several people shot in one round */
+.victims { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.victim { --d: 0s; }
+.v-photo { animation: hit 0.18s linear calc(0.46s + var(--d)), fall 0.9s ease-in calc(0.66s + var(--d)) forwards; }
+.bang { animation: bang-in 0.2s ease-out calc(0.46s + var(--d)) forwards; }
+.shot-scene.many .v-photo { width: 64px; height: 64px; }
+.shot-scene.many .bang { font-size: 22px; top: -18px; left: -14px; }
+.shot-scene.many .k-flash { animation: flash 0.28s ease-out 0.3s 3; }
+.w-emoji { display: grid; place-items: center; font-size: 76px; line-height: 1; border-color: var(--red) !important; }
+@media (max-width: 959px) { .ceremony .w-emoji { font-size: 56px; } }
+.anon-face { display: grid; place-items: center; font-size: 26px; background: var(--raised); border: 1px solid var(--line); }
