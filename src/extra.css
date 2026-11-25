@@ -620,3 +620,10 @@ img { max-width: 100%; }
   .ceremony .kn-photo { width: 52px; height: 52px; }
 }
 .kn-say { white-space: nowrap; }
+/* case comments */
+.cmt-list { margin: 0; }
+.cmt-in { min-height: 72px; }
+.cmt-form { gap: 8px; }
+.cmt-toggle { justify-self: start; margin-top: 2px; font-size: 13px; }
+.cmt.compact { padding: 8px 0 0 10px; border-left: 2px solid var(--line); margin-top: 4px; }
+.cmt-form { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }

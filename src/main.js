@@ -913,6 +913,73 @@ function screenCases(mid, idx) {
       : h("div", { class: "empty", text: S.incidentsReady ? (isBoss() ? "아직 기록된 사건이 없어요. ‘사건 등록’으로 첫 사건을 남겨 보세요." : "아직 기록된 사건이 없어요.") : "사건일지를 불러오는 중…" }),
     mid ? h("button", { type: "button", class: "ghost wide", onclick: function () { go("cases"); }, text: "사건일지 전체 보기" }) : null);
 }
+/* comments (사건일지, 익명 제보): written under each member's own name. One live list per post on screen. */
+const CMTS = {};            /* path -> { unsub, list, ready, denied, confirm } */
+let CMT_WANT = {};
+function cmtStore(path) {
+  CMT_WANT[path] = 1;
+  let c = CMTS[path];
+  if (c) return c;
+  c = CMTS[path] = { unsub: null, list: [], ready: false, denied: false, confirm: null };
+  const parts = path.split("/");
+  c.unsub = onSnapshot(query(collection(db, parts[0], parts[1], "comments"), orderBy("createdAt"), limitToLast(300)), function (snap) {
+    c.list = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })); });
+    c.ready = true; c.denied = false; render();
+  }, function () { c.ready = true; c.denied = true; render(); });
+  return c;
+}
+/* after each screen is drawn: stop listening to posts that are no longer on screen */
+function cmtSweep() {
+  Object.keys(CMTS).forEach(function (k) { if (!CMT_WANT[k]) { try { CMTS[k].unsub(); } catch (e) {} delete CMTS[k]; } });
+  CMT_WANT = {};
+}
+function commentsBox(path, opts) {
+  opts = opts || {};
+  const c = cmtStore(path), me = meMember(), key = "cmt-" + path.replace("/", "-");
+  const list = c.list.length
+    ? h("ul", { class: "gb-list cmt-list" }, c.list.map(function (x) {
+        const m = findMember(x.memberId);
+        const mine = S.user && x.uid === S.user.uid;
+        return h("li", { class: "gb-item" },
+          h("div", { class: "gb-photo" }, photoBox(m || { nick: x.nick })),
+          h("div", { class: "gb-body" },
+            h("div", { class: "gb-meta" }, h("b", { text: m ? m.nick : (x.nick || "손님") }), m && m.rank ? h("span", { class: "gb-rank", text: m.rank }) : null,
+              h("span", { class: "gb-time", text: timeAgo(x.createdAt) })),
+            h("p", { class: "gb-text", text: x.text }),
+            mine || isBoss() ? (c.confirm === x.id
+              ? h("div", { class: "gb-del" }, h("span", { text: "지울까요?" }),
+                  h("button", { type: "button", class: "link-btn", onclick: function () { c.confirm = null; render(); }, text: "취소" }),
+                  h("button", { type: "button", class: "link-btn danger", onclick: async function () {
+                    const parts = path.split("/");
+                    try { await deleteDoc(doc(db, parts[0], parts[1], "comments", x.id)); c.confirm = null; } catch (e) { toast(errText(e)); }
+                  }, text: "지우기" }))
+              : h("button", { type: "button", class: "link-btn quiet", onclick: function () { c.confirm = x.id; render(); }, text: "지우기" })) : null));
+      }))
+    : h("p", { class: "note", text: !c.ready ? "댓글을 불러오는 중…" : c.denied ? "댓글 기능을 준비 중이에요. 두목이 보안 규칙을 업데이트하면 열려요." : (opts.empty || "아직 댓글이 없어요.") });
+  let form = null;
+  if (!c.denied) {
+    if (!me) form = h("p", { class: "note", text: "댓글은 신원을 고른 조직원만 달 수 있어요. 본부에서 ‘신원 변경’으로 나를 골라 주세요." });
+    else {
+      const ta = draft("textarea", key, { class: "gb-in cmt-in", maxlength: "300", placeholder: opts.placeholder || "댓글 달기" });
+      form = h("form", { class: "cmt-form", novalidate: true },
+        h("div", { class: "field-label", text: me.nick + "(으)로 댓글 달기" }), ta,
+        h("button", { type: "submit", class: "save", disabled: !S.user, text: "댓글 달기" }));
+      form.addEventListener("submit", async function (ev) {
+        ev.preventDefault();
+        const t = (S.drafts[key] || ta.value || "").trim();
+        if (!t || !S.user) return;
+        const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+        const parts = path.split("/");
+        try {
+          await addDoc(collection(db, parts[0], parts[1], "comments"), { uid: S.user.uid, memberId: me.id, nick: me.nick, text: t.slice(0, 300), createdAt: serverTimestamp() });
+          S.drafts[key] = ""; sfx("pop"); render();
+        } catch (e) { btn.disabled = false; toast(errText(e)); }
+      });
+    }
+  }
+  return h("div", { class: "field cmt" + (opts.compact ? " compact" : "") }, opts.compact ? null : h("div", { class: "field-label", text: "댓글 " + c.list.length }), list, form);
+}
+function cmtCount(path) { return cmtStore(path).list.length; }
 function screenCase(id) {
   const back = h("button", { class: "back", type: "button", onclick: function () { history.length > 1 ? history.back() : go("cases"); }, text: "뒤로" });
   const x = S.incidents.find(function (i) { return i.id === id; });
@@ -956,6 +1023,7 @@ function screenCase(id) {
       charges.length ? h("div", { class: "field" }, h("div", { class: "field-label", text: "관련 혐의" }), h("ul", { class: "case-charges" }, charges)) : null,
       h("div", { class: "stamp", "aria-hidden": "true", text: "기록" })),
     ops,
+    commentsBox("incidents/" + id, { placeholder: "이 사건에 대한 증언 · 변명 · 제보", empty: "아직 댓글이 없어요. 첫 증언을 남겨 주세요." }),
     h("button", { type: "button", class: "ghost wide", onclick: function () { go("cases"); }, text: "사건일지 전체 보기" }));
 }
 function openCaseEditor(x) {
@@ -1139,6 +1207,10 @@ function screenTips() {
         h("div", { class: "gb-meta" }, h("b", { text: "익명 제보" }), boss ? h("span", { class: "gb-rank", text: t.public ? "공개" : "비공개" }) : null,
           h("span", { class: "gb-time", text: timeAgo(t.createdAt) })),
         h("p", { class: "gb-text", text: t.text }),
+        t.public ? h("button", { type: "button", class: "link-btn cmt-toggle", "aria-expanded": S.tipOpen && S.tipOpen[t.id] ? "true" : "false",
+          onclick: function () { S.tipOpen = S.tipOpen || {}; S.tipOpen[t.id] = !S.tipOpen[t.id]; render(); },
+          text: "💬 댓글 " + cmtCount("tips/" + t.id) + (S.tipOpen && S.tipOpen[t.id] ? " 접기" : "") }) : null,
+        t.public && S.tipOpen && S.tipOpen[t.id] ? commentsBox("tips/" + t.id, { compact: true, placeholder: "이 제보에 한마디 (목격담, 해명, 반박…)", empty: "아직 댓글이 없어요." }) : null,
         boss ? h("div", { class: "gb-del" },
           h("button", { type: "button", class: "link-btn", onclick: async function () { try { await updateDoc(doc(db, "tips", t.id), { public: !t.public }); } catch (e) { toast(errText(e)); } }, text: t.public ? "숨기기" : "공개하기" }),
           h("button", { type: "button", class: "link-btn danger", onclick: async function () { try { await deleteDoc(doc(db, "tips", t.id)); } catch (e) { toast(errText(e)); } }, text: "삭제" })) : null);
@@ -4277,6 +4349,7 @@ function draw() {
   else if (r === "game-manito") { tab = "games"; view = screenManito(); }
   else view = screenHQ();
   if (r.indexOf("room-") !== 0) { watchRoom(null); skWatch(null); smWatch(null); }
+
   if (r !== lastRoute) S.confirmDelete = false;
 
   const gate = S.membersReady && needsGate();
@@ -4296,6 +4369,7 @@ function draw() {
   document.body.classList.toggle("wide-room", r.indexOf("room-") === 0);
   if (r !== lastRoute && view.classList) view.classList.add("enter");
   main.replaceChildren(view);
+  cmtSweep();
   requestAnimationFrame(fitBubbles);
   bgmSet(bgmMoodFor());
   Object.keys(tabEls).forEach(function (k) { if (k === tab && !gate) tabEls[k].setAttribute("aria-current", "page"); else tabEls[k].removeAttribute("aria-current"); });

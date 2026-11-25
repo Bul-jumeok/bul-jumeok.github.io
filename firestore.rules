@@ -86,6 +86,16 @@ service cloud.firestore {
     match /incidents/{id} {
       allow read: if true;
       allow write: if isBoss();
+      // comments: everyone signed in writes under their own sign-in; they or the boss can delete
+      match /comments/{cid} {
+        allow read: if true;
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['uid', 'memberId', 'nick', 'text', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid
+          && shortText(request.resource.data.text, 300)
+          && shortText(request.resource.data.nick, 30);
+        allow delete: if isBoss() || (signedIn() && resource.data.uid == request.auth.uid);
+      }
     }
     match /incidentShots/{id} {
       allow read: if true;
@@ -103,6 +113,17 @@ service cloud.firestore {
         && request.resource.data.public == false
         && shortText(request.resource.data.text, 300);
       allow update, delete: if isBoss();
+      // comments on published tips, under each member's own sign-in
+      match /comments/{cid} {
+        allow read: if get(/databases/$(database)/documents/tips/$(id)).data.public == true || isBoss();
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/tips/$(id)).data.public == true
+          && request.resource.data.keys().hasOnly(['uid', 'memberId', 'nick', 'text', 'createdAt'])
+          && request.resource.data.uid == request.auth.uid
+          && shortText(request.resource.data.text, 300)
+          && shortText(request.resource.data.nick, 30);
+        allow delete: if isBoss() || (signedIn() && resource.data.uid == request.auth.uid);
+      }
     }
     match /liarTopics/{id} {
       allow read: if true;
