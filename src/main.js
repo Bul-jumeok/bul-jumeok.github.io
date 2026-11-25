@@ -122,18 +122,32 @@ const SND = { ctx: null, on: true, buf: null, breath: null, lastSec: null, lastK
 try { SND.on = localStorage.getItem("bf-sound") !== "off"; } catch (e) {}
 function ac() {
   if (!SND.on) return null;
+  /* iPhone: treat our sounds as media so the silent switch doesn't mute them (iOS 16.4+) */
+  try { if (navigator.audioSession && navigator.audioSession.type !== "playback") navigator.audioSession.type = "playback"; } catch (e) {}
   if (!SND.ctx) {
     const C = window.AudioContext || window.webkitAudioContext;
     if (!C) return null;
     try { SND.ctx = new C(); } catch (e) { return null; }
   }
-  if (SND.ctx.state === "suspended") SND.ctx.resume().catch(function () {});
+  /* "suspended" before the first touch, "interrupted" on iPhone after a call or switching apps */
+  if (SND.ctx.state !== "running") { try { SND.ctx.resume().catch(function () {}); } catch (e) {} }
   return SND.ctx;
 }
-/* phones only allow sound after the viewer touches the page */
-["pointerdown", "keydown", "touchstart"].forEach(function (ev) {
-  document.addEventListener(ev, function () { if (SND.on) ac(); }, { passive: true });
+/* phones only allow sound after the viewer touches the page; iPhone also wants a sound played during that touch */
+function unlockAudio() {
+  if (!SND.on) return;
+  const c = ac(); if (!c) return;
+  if (SND.unlocked && c.state === "running") return;
+  try {
+    const b = c.createBuffer(1, 1, 22050), src = c.createBufferSource();
+    src.buffer = b; src.connect(c.destination); src.start(0);
+    SND.unlocked = true;
+  } catch (e) {}
+}
+["pointerdown", "touchstart", "touchend", "click", "keydown"].forEach(function (ev) {
+  document.addEventListener(ev, unlockAudio, { passive: true, capture: true });
 });
+document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && SND.ctx && SND.on) ac(); });
 function noiseBuf(c) {
   if (!SND.buf) {
     const b = c.createBuffer(1, Math.floor(c.sampleRate * 1.5), c.sampleRate), d = b.getChannelData(0);
