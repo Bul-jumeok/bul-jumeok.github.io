@@ -28,6 +28,28 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isBoss();
     }
+    // Case log, screenshots and gatherings: everyone reads, only the boss writes.
+    match /incidents/{id} {
+      allow read: if true;
+      allow write: if isBoss();
+    }
+    match /incidentShots/{id} {
+      allow read: if true;
+      allow write: if isBoss();
+    }
+    match /gatherings/{id} {
+      allow read: if true;
+      allow write: if isBoss();
+    }
+    // Anonymous tips: no author is stored; only published tips are readable by everyone.
+    match /tips/{id} {
+      allow read: if resource.data.public == true || isBoss();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['text', 'public', 'createdAt'])
+        && request.resource.data.public == false
+        && shortText(request.resource.data.text, 300);
+      allow update, delete: if isBoss();
+    }
     match /liarTopics/{id} {
       allow read: if true;
       allow write: if isBoss();

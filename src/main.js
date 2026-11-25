@@ -5,7 +5,7 @@ import {
 } from "firebase/auth";
 import {
   getFirestore, connectFirestoreEmulator, collection, doc, onSnapshot, query, orderBy, limit, limitToLast, where,
-  setDoc, addDoc, updateDoc, deleteDoc, writeBatch, runTransaction, serverTimestamp,
+  setDoc, addDoc, updateDoc, deleteDoc, getDoc, writeBatch, runTransaction, serverTimestamp,
   arrayUnion, arrayRemove, Timestamp, deleteField
 } from "firebase/firestore";
 import LOGO from "./logo.txt";
@@ -51,7 +51,8 @@ const S = {
   roomId: null, room: null, roomMissing: false, msgs: [],
   drafts: {},
   pick: null, confirmDelete: false, gbConfirm: null,
-  flipped: {}, importing: false, sketchNames: null, sketchKnown: false, migrated: false
+  flipped: {}, importing: false,
+  incidents: [], incidentsReady: false, gatherings: [], tips: [], tipsReady: false, shots: {}, caseConfirm: null, gatherConfirm: null, sketchNames: null, sketchKnown: false, migrated: false
 };
 function isBoss() { return !!(S.user && !S.user.isAnonymous && S.bossUid && S.bossUid === S.user.uid); }
 function myUid() { return S.user ? S.user.uid : null; }
@@ -476,6 +477,14 @@ function subscribeBase() {
     S.sketchNames = snap.exists() && Array.isArray(snap.data().names) ? snap.data().names : null;
     S.sketchKnown = true; render();
   }, function () { S.sketchKnown = true; });
+  onSnapshot(collection(db, "incidents"), function (snap) {
+    S.incidents = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })); }).sort(byCaseDate);
+    S.incidentsReady = true; render();
+  }, function () { S.incidentsReady = true; render(); });
+  onSnapshot(collection(db, "gatherings"), function (snap) {
+    S.gatherings = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+    render();
+  });
   onSnapshot(collection(db, "liarTopics"), function (snap) {
     S.topics = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); })
       .sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
@@ -594,6 +603,380 @@ async function importSeed() {
   S.importing = false; render();
 }
 
+
+/* ---------- 조직 사건일지 · 오늘의 소집 · 익명 제보함 ---------- */
+function pad2(n) { return String(n).padStart(2, "0"); }
+function todayStr() { const d = new Date(); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
+function fmtDate(ds) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ds || "");
+  if (!m) return ds || "";
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return (+m[1] !== new Date().getFullYear() ? m[1] + "년 " : "") + (+m[2]) + "월 " + (+m[3]) + "일 (" + WEEK[d.getDay()] + ")";
+}
+function fmtTime(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t || "");
+  if (!m) return t || "";
+  const hh = +m[1], ap = hh < 12 ? "오전" : "오후", h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return ap + " " + h12 + ":" + m[2];
+}
+function byCaseDate(a, b) { return (b.date || "").localeCompare(a.date || "") || tsMs(b.createdAt) - tsMs(a.createdAt); }
+function chargeKey(mid, text) { return mid + "|" + text; }
+function casesForCharge(mid, text) { const k = chargeKey(mid, text); return S.incidents.filter(function (x) { return (x.charges || []).indexOf(k) >= 0; }); }
+function firstLine(t) { const l = String(t || "").split("\n")[0]; return l.length > 60 ? l.slice(0, 60) + "…" : l; }
+function loadShot(id) {
+  if (S.shots[id] !== undefined) return;
+  S.shots[id] = null;
+  getDoc(doc(db, "incidentShots", id)).then(function (snap) {
+    S.shots[id] = snap.exists() ? snap.data().data || "" : ""; render();
+  }, function () { S.shots[id] = ""; render(); });
+}
+
+/* full screen image viewer: double tap to zoom, tap outside or ✕ to close */
+function openLightbox(src) {
+  if (!safePhoto(src)) return;
+  const img = h("img", { src: src, alt: "스크린샷 크게 보기" });
+  const scroller = h("div", { class: "lb-scroll" }, img);
+  const wrap = h("div", { class: "lb", role: "dialog", "aria-modal": "true", "aria-label": "스크린샷 크게 보기" },
+    scroller,
+    h("button", { type: "button", class: "lb-x", "aria-label": "닫기", text: "✕", onclick: close }),
+    h("p", { class: "lb-hint", text: "두 번 탭하면 확대 · 바깥을 누르면 닫혀요" }));
+  function close() { wrap.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); }
+  function onKey(e) { if (e.key === "Escape") close(); }
+  let lastTap = 0;
+  img.addEventListener("click", function (e) {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastTap < 320) { img.classList.toggle("zoom"); lastTap = 0; } else lastTap = now;
+  });
+  img.addEventListener("dblclick", function (e) { e.preventDefault(); });
+  scroller.addEventListener("click", function (e) { if (e.target === scroller) close(); });
+  wrap.addEventListener("click", function (e) { if (e.target === wrap) close(); });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(wrap);
+  document.body.style.overflow = "hidden";
+}
+
+/* screenshots are stored as compressed images in Firestore, one document each */
+function resizeShot(file) {
+  return new Promise(function (resolve, reject) {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      let max = 1280, q = 0.72, out = "";
+      for (let tries = 0; tries < 6; tries++) {
+        const sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
+        const x = c.getContext("2d"); x.fillStyle = "#000"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL("image/jpeg", q);
+        if (out.length < 900000) break;
+        max = Math.round(max * 0.8); q = Math.max(0.5, q - 0.06);
+      }
+      URL.revokeObjectURL(url); resolve(out);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+    img.src = url;
+  });
+}
+
+/* tips: everyone sees published ones, the boss sees all */
+let tipsUnsub = null, tipsMode = null;
+function ensureTipsSub() {
+  const mode = isBoss() ? "all" : "public";
+  if (mode === tipsMode) return;
+  if (tipsUnsub) tipsUnsub();
+  tipsMode = mode; S.tipsReady = false;
+  const q = mode === "all" ? collection(db, "tips") : query(collection(db, "tips"), where("public", "==", true));
+  tipsUnsub = onSnapshot(q, function (snap) {
+    S.tips = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data({ serverTimestamps: "estimate" })); })
+      .sort(function (a, b) { return tsMs(b.createdAt) - tsMs(a.createdAt); });
+    S.tipsReady = true; render();
+  }, function () {
+    /* refused (e.g. boss status not saved on the server yet): try again shortly */
+    S.tipsReady = true; render();
+    setTimeout(function () { if (tipsMode === mode) { tipsMode = null; render(); } }, 2000);
+  });
+}
+
+/* HQ briefing: today's gathering, latest public tip, latest case */
+function briefing() {
+  const today = todayStr();
+  const tg = S.gatherings.filter(function (g) { return g.date === today; }).sort(function (a, b) { return (a.time || "").localeCompare(b.time || ""); })[0];
+  const tip = S.tips.filter(function (t) { return t.public; })[0];
+  const inc = S.incidents[0];
+  function card(label, main, sub, onclick, muted) {
+    return h("button", { type: "button", class: "brief-card" + (muted ? " muted" : ""), onclick: onclick },
+      h("span", { class: "brief-label", text: label }),
+      h("b", { class: "brief-main", text: main }),
+      sub ? h("span", { class: "brief-sub", text: sub }) : null,
+      h("span", { class: "brief-arr", "aria-hidden": "true", text: "→" }));
+  }
+  return h("div", { class: "brief" },
+    card("오늘의 소집", tg ? tg.title : "오늘은 소집 없음", tg ? fmtTime(tg.time) + " 시작" : "소집 일정 보기", function () { go(tg ? "gather-" + tg.id : "gather"); }, !tg),
+    card("최신 익명 제보", tip ? firstLine(tip.text) : "아직 공개된 제보가 없어요", tip ? timeAgo(tip.createdAt) : "제보하러 가기", function () { go("tips"); }, !tip),
+    h("div", { class: "brief-row" },
+      card("최근 사건", inc ? inc.title : "아직 기록된 사건이 없어요", inc ? fmtDate(inc.date) : "", function () { go(inc ? "case-" + inc.id : "cases"); }, !inc),
+      h("button", { type: "button", class: "brief-all", onclick: function () { go("cases"); } }, "사건일지", h("br"), "전체 보기")));
+}
+
+/* ----- case list / detail ----- */
+function caseItem(x) {
+  return h("li", null, h("button", { type: "button", class: "case-item", onclick: function () { go("case-" + x.id); } },
+    h("span", { class: "ci-date", text: fmtDate(x.date) }),
+    h("b", { class: "ci-title", text: x.title }),
+    x.desc ? h("span", { class: "ci-desc", text: x.desc }) : null,
+    h("span", { class: "ci-meta", text: ((x.members || []).map(nickOf).join(", ") || "관련 조직원 없음") + (x.hasShot ? " · 📷 스크린샷" : "") })));
+}
+function screenCases(mid, idx) {
+  let list = S.incidents, sub = "발생일 최신순이에요. 사건을 누르면 자세히 볼 수 있어요.", eyebrow = "조직 사건일지", title = "사건 " + S.incidents.length + "건";
+  let back = h("button", { class: "back", type: "button", onclick: function () { go("hq"); }, text: "본부로" });
+  if (mid) {
+    const m = findMember(mid), text = m && (m.charges || [])[idx];
+    list = text ? casesForCharge(mid, text) : [];
+    eyebrow = (m ? m.nick : "조직원") + " 수배서 · 혐의 관련 사건";
+    title = "관련 사건 " + list.length + "건"; sub = text ? "‘" + text + "’" : "혐의를 찾을 수 없어요.";
+    back = h("button", { class: "back", type: "button", onclick: function () { go("m-" + mid); }, text: "수배서로" });
+  }
+  return h("section", { class: "screen" }, back,
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: eyebrow }), h("h2", { text: title }), h("p", { text: sub })),
+      !mid && isBoss() ? h("button", { class: "add-btn", type: "button", onclick: function () { openCaseEditor(null); }, text: "사건 등록" }) : null),
+    list.length ? h("ul", { class: "case-list" }, list.map(caseItem))
+      : h("div", { class: "empty", text: S.incidentsReady ? (isBoss() ? "아직 기록된 사건이 없어요. ‘사건 등록’으로 첫 사건을 남겨 보세요." : "아직 기록된 사건이 없어요.") : "사건일지를 불러오는 중…" }),
+    mid ? h("button", { type: "button", class: "ghost wide", onclick: function () { go("cases"); }, text: "사건일지 전체 보기" }) : null);
+}
+function screenCase(id) {
+  const back = h("button", { class: "back", type: "button", onclick: function () { history.length > 1 ? history.back() : go("cases"); }, text: "뒤로" });
+  const x = S.incidents.find(function (i) { return i.id === id; });
+  if (!x) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: S.incidentsReady ? "이 사건은 삭제됐거나 없어요." : "사건을 불러오는 중…" }));
+  if (x.hasShot) loadShot(id);
+  const shot = S.shots[id];
+  const shotEl = !x.hasShot ? null
+    : shot ? h("button", { type: "button", class: "case-shot", onclick: function () { openLightbox(shot); }, "aria-label": "스크린샷 크게 보기" },
+        h("img", { src: safePhoto(shot), alt: x.title + " 스크린샷" }), h("span", { class: "zoom-hint", text: "🔍 눌러서 크게 보기" }))
+      : h("div", { class: "case-shot loading", text: shot === "" ? "스크린샷을 불러오지 못했어요." : "스크린샷 불러오는 중…" });
+  const charges = (x.charges || []).map(function (k) {
+    const i = k.indexOf("|"), mid = k.slice(0, i), text = k.slice(i + 1);
+    return h("li", null, h("button", { type: "button", class: "case-charge", onclick: function () { go("m-" + mid); } },
+      h("span", { class: "cc-who", text: nickOf(mid) }), h("span", { class: "cc-text", text: text })));
+  });
+  const ops = isBoss() ? (S.caseConfirm === id
+    ? h("div", { class: "confirm" }, h("p", { text: "‘" + x.title + "’ 사건을 삭제할까요? 스크린샷도 같이 지워져요." }),
+        h("div", { class: "op-row" },
+          h("button", { type: "button", onclick: function () { S.caseConfirm = null; render(); }, text: "취소" }),
+          h("button", { type: "button", class: "danger", onclick: async function () {
+            try { const bt = writeBatch(db); bt.delete(doc(db, "incidents", id)); bt.delete(doc(db, "incidentShots", id)); await bt.commit(); S.caseConfirm = null; go("cases"); toast("사건을 삭제했어요."); }
+            catch (e) { toast(errText(e)); }
+          }, text: "삭제하기" })))
+    : h("div", { class: "op-row" },
+        h("button", { type: "button", onclick: function () { openCaseEditor(x); }, text: "사건 수정" }),
+        h("button", { type: "button", class: "danger", onclick: function () { S.caseConfirm = id; render(); }, text: "삭제" }))) : null;
+  return h("section", { class: "screen" }, back,
+    h("article", { class: "case-file" },
+      h("div", { class: "case" }, h("span", null, "사건번호 ", h("b", { text: "CASE-" + (x.date || "").replace(/-/g, "") })), h("span", { text: fmtDate(x.date) })),
+      h("h2", { class: "case-title", text: x.title }),
+      x.desc ? h("p", { class: "statement", text: x.desc }) : null,
+      shotEl,
+      h("div", { class: "field" }, h("div", { class: "field-label", text: "관련 조직원" }),
+        (x.members || []).length
+          ? h("div", { class: "case-members" }, x.members.map(function (mid) {
+              const m = findMember(mid) || { nick: nickOf(mid) };
+              return h("button", { type: "button", class: "case-member", onclick: function () { go("m-" + mid); } },
+                h("div", { class: "cm-photo" }, photoBox(m)), h("span", { text: m.nick }), h("small", { text: "수배서 →" }));
+            }))
+          : h("p", { class: "note", text: "연결된 조직원이 없어요." })),
+      charges.length ? h("div", { class: "field" }, h("div", { class: "field-label", text: "관련 혐의" }), h("ul", { class: "case-charges" }, charges)) : null,
+      h("div", { class: "stamp", "aria-hidden": "true", text: "기록" })),
+    ops,
+    h("button", { type: "button", class: "ghost wide", onclick: function () { go("cases"); }, text: "사건일지 전체 보기" }));
+}
+function openCaseEditor(x) {
+  const isNew = !x;
+  const dr = { shot: null, members: (x && x.members || []).slice(), charges: (x && x.charges || []).slice() };
+  const title = h("input", { type: "text", id: "c-title", maxlength: "40", value: x ? x.title : "", autocomplete: "off", placeholder: "예: 쏘기 레이더 발동" });
+  const date = h("input", { type: "date", id: "c-date", value: x ? x.date : todayStr() });
+  const desc = h("input", { type: "text", id: "c-desc", maxlength: "100", value: x ? (x.desc || "") : "", autocomplete: "off", placeholder: "한 줄 설명" });
+  const msg = h("p", { class: "msg", role: "status" });
+  const shotBox = h("div", { class: "shot-edit" });
+  function drawShot() {
+    const cur = dr.shot !== null ? dr.shot : (x && x.hasShot ? S.shots[x.id] : "");
+    shotBox.replaceChildren(
+      cur ? h("img", { src: safePhoto(cur), alt: "스크린샷 미리보기" }) : h("div", { class: "shot-empty", text: x && x.hasShot && cur == null ? "불러오는 중…" : "스크린샷 없음 (선택)" }),
+      h("div", { class: "photo-btns" }, h("label", { class: "file-btn" }, cur ? "스크린샷 바꾸기" : "스크린샷 고르기", fileIn),
+        cur ? h("button", { type: "button", class: "ghost", onclick: function () { dr.shot = ""; drawShot(); }, text: "스크린샷 빼기" }) : null));
+  }
+  const fileIn = h("input", { type: "file", id: "c-shot", accept: "image/*" });
+  fileIn.addEventListener("change", function () {
+    const f = fileIn.files && fileIn.files[0]; if (!f) return;
+    msg.className = "msg"; msg.textContent = "스크린샷 정리 중…";
+    resizeShot(f).then(function (d) { dr.shot = d; drawShot(); msg.textContent = "스크린샷을 붙였어요."; },
+      function () { msg.className = "msg err"; msg.textContent = "이 사진은 열 수 없어요. JPG나 PNG로 골라 주세요."; });
+    fileIn.value = "";
+  });
+  if (x && x.hasShot && S.shots[x.id] === undefined) { loadShot(x.id); const t = setInterval(function () { if (S.shots[x.id] !== null) { clearInterval(t); if (sheetEl) drawShot(); } }, 200); }
+  const pick = h("div", { class: "case-pick" });
+  function drawPick() {
+    pick.replaceChildren();
+    append(pick,
+      h("p", { class: "sub-label", text: "관련 조직원 (여러 명 고를 수 있어요)" }),
+      h("div", { class: "chips" }, S.members.map(function (m) {
+        const on = dr.members.indexOf(m.id) >= 0;
+        return h("button", { type: "button", class: "chip", "aria-pressed": on ? "true" : "false", onclick: function () {
+          if (on) { dr.members = dr.members.filter(function (v) { return v !== m.id; }); dr.charges = dr.charges.filter(function (k) { return k.indexOf(m.id + "|") !== 0; }); }
+          else dr.members.push(m.id);
+          drawPick();
+        }, text: m.nick });
+      })),
+      dr.members.length ? h("p", { class: "sub-label", text: "관련 혐의 (선택)" }) : null,
+      dr.members.map(function (mid) {
+        const m = findMember(mid); if (!m) return null;
+        const ch = (m.charges || []).filter(function (c) { return c && String(c).trim(); });
+        return h("div", { class: "pick-charges" }, h("b", { text: m.nick }),
+          ch.length ? ch.map(function (c) {
+            const k = chargeKey(mid, c), on = dr.charges.indexOf(k) >= 0;
+            return h("button", { type: "button", class: "chip charge", "aria-pressed": on ? "true" : "false", onclick: function () {
+              if (on) dr.charges = dr.charges.filter(function (v) { return v !== k; }); else dr.charges.push(k);
+              drawPick();
+            }, text: c });
+          }) : h("span", { class: "note", text: "등록된 혐의 없음" }));
+      }));
+  }
+  const saveBtn = h("button", { type: "submit", class: "save", text: isNew ? "사건 등록" : "수정 내용 저장" });
+  const form = h("form", { class: "form", novalidate: true },
+    h("label", null, h("b", { text: "사건 제목 (필수)" }), title),
+    h("label", null, h("b", { text: "발생일 (필수)" }), date),
+    h("label", null, h("b", { text: "한 줄 설명" }), desc),
+    h("div", { class: "field" }, h("b", { class: "sub-label", text: "게임 스크린샷" }), shotBox),
+    pick, msg, saveBtn);
+  form.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = title.value.trim(), d = date.value;
+    if (!t) { msg.className = "msg err"; msg.textContent = "사건 제목을 적어주세요."; title.focus(); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { msg.className = "msg err"; msg.textContent = "발생일을 골라주세요."; return; }
+    const id = x ? x.id : doc(collection(db, "incidents")).id;
+    const hasShot = dr.shot === null ? !!(x && x.hasShot) : !!dr.shot;
+    const rec = { title: t, date: d, desc: desc.value.trim(), members: dr.members.slice(),
+      charges: dr.charges.filter(function (k) { return dr.members.indexOf(k.slice(0, k.indexOf("|"))) >= 0; }),
+      hasShot: hasShot, updatedAt: serverTimestamp(), createdAt: x && x.createdAt ? x.createdAt : serverTimestamp() };
+    saveBtn.disabled = true; saveBtn.textContent = "저장 중…";
+    try {
+      const bt = writeBatch(db);
+      bt.set(doc(db, "incidents", id), rec);
+      if (dr.shot) bt.set(doc(db, "incidentShots", id), { data: dr.shot });
+      else if (dr.shot === "") bt.delete(doc(db, "incidentShots", id));
+      await bt.commit();
+      if (dr.shot !== null) S.shots[id] = dr.shot;
+      closeEditor(); go("case-" + id); toast(isNew ? "사건을 등록했어요." : "사건을 저장했어요.");
+    } catch (e) { saveBtn.disabled = false; saveBtn.textContent = isNew ? "사건 등록" : "수정 내용 저장"; msg.className = "msg err"; msg.textContent = errText(e); }
+  });
+  openSheet(isNew ? "조직 사건일지 · 새 사건" : "CASE-" + (x.date || "").replace(/-/g, ""), isNew ? "사건 등록" : "사건 수정", form);
+  drawShot(); drawPick();
+}
+
+/* ----- gatherings ----- */
+function gatherItem(g, today) {
+  return h("li", null, h("button", { type: "button", class: "case-item" + (g.date === today ? " today" : ""), onclick: function () { go("gather-" + g.id); } },
+    h("span", { class: "ci-date", text: (g.date === today ? "오늘 · " : "") + fmtDate(g.date) + " · " + fmtTime(g.time) }),
+    h("b", { class: "ci-title", text: g.title }),
+    g.memo ? h("span", { class: "ci-desc", text: g.memo }) : null));
+}
+function screenGathers() {
+  const today = todayStr();
+  const up = S.gatherings.filter(function (g) { return (g.date || "") >= today; }).sort(function (a, b) { return (a.date + a.time).localeCompare(b.date + b.time); });
+  const past = S.gatherings.filter(function (g) { return (g.date || "") < today; }).sort(function (a, b) { return (b.date + b.time).localeCompare(a.date + a.time); }).slice(0, 10);
+  return h("section", { class: "screen" },
+    h("button", { class: "back", type: "button", onclick: function () { go("hq"); }, text: "본부로" }),
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: "조직 소집령" }), h("h2", { text: "소집 일정" }), h("p", { text: "두목이 정한 모임 일정이에요." })),
+      isBoss() ? h("button", { class: "add-btn", type: "button", onclick: function () { openGatherEditor(null); }, text: "소집 등록" }) : null),
+    up.length ? h("ul", { class: "case-list" }, up.map(function (g) { return gatherItem(g, today); })) : h("div", { class: "empty", text: "예정된 소집이 없어요." }),
+    past.length ? h("details", { class: "guide" }, h("summary", { text: "지난 소집" }), h("div", { class: "guide-body" }, h("ul", { class: "case-list" }, past.map(function (g) { return gatherItem(g, today); })))) : null);
+}
+function screenGather(id) {
+  const back = h("button", { class: "back", type: "button", onclick: function () { go("gather"); }, text: "소집 일정" });
+  const g = S.gatherings.find(function (x) { return x.id === id; });
+  if (!g) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "이 소집은 취소됐거나 없어요." }));
+  const today = g.date === todayStr();
+  const ops = isBoss() ? (S.gatherConfirm === id
+    ? h("div", { class: "confirm" }, h("p", { text: "‘" + g.title + "’ 소집을 취소할까요?" }),
+        h("div", { class: "op-row" },
+          h("button", { type: "button", onclick: function () { S.gatherConfirm = null; render(); }, text: "아니요" }),
+          h("button", { type: "button", class: "danger", onclick: async function () {
+            try { await deleteDoc(doc(db, "gatherings", id)); S.gatherConfirm = null; go("gather"); toast("소집을 취소했어요."); } catch (e) { toast(errText(e)); }
+          }, text: "소집 취소" })))
+    : h("div", { class: "op-row" },
+        h("button", { type: "button", onclick: function () { openGatherEditor(g); }, text: "소집 수정" }),
+        h("button", { type: "button", class: "danger", onclick: function () { S.gatherConfirm = id; render(); }, text: "취소" }))) : null;
+  return h("section", { class: "screen" }, back,
+    h("article", { class: "case-file" },
+      h("div", { class: "case" }, h("span", null, "소집령 ", h("b", { text: today ? "오늘" : fmtDate(g.date) })), h("span", { text: fmtTime(g.time) + " 시작" })),
+      h("h2", { class: "case-title", text: g.title }),
+      h("p", { class: "gather-when" }, h("b", { text: fmtDate(g.date) }), " " + fmtTime(g.time) + " 시작"),
+      g.memo ? h("p", { class: "statement", text: g.memo }) : null,
+      h("div", { class: "stamp", "aria-hidden": "true", text: "소집" })),
+    ops);
+}
+function openGatherEditor(g) {
+  const isNew = !g;
+  const title = h("input", { type: "text", id: "g-title", maxlength: "40", value: g ? g.title : "", autocomplete: "off", placeholder: "예: 불주먹 정기 라이어 대회" });
+  const date = h("input", { type: "date", id: "g-date", value: g ? g.date : todayStr() });
+  const time = h("input", { type: "time", id: "g-time", value: g ? g.time : "21:00" });
+  const memo = h("input", { type: "text", id: "g-memo", maxlength: "100", value: g ? (g.memo || "") : "", autocomplete: "off", placeholder: "메모 (선택) 예: 디스코드 2번 방" });
+  const msg = h("p", { class: "msg", role: "status" });
+  const saveBtn = h("button", { type: "submit", class: "save", text: isNew ? "소집 등록" : "수정 내용 저장" });
+  const form = h("form", { class: "form", novalidate: true },
+    h("label", null, h("b", { text: "제목 (필수)" }), title),
+    h("label", null, h("b", { text: "날짜" }), date),
+    h("label", null, h("b", { text: "시작 시간" }), time),
+    h("label", null, h("b", { text: "메모" }), memo), msg, saveBtn);
+  form.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = title.value.trim();
+    if (!t) { msg.className = "msg err"; msg.textContent = "제목을 적어주세요."; return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value) || !/^\d{2}:\d{2}$/.test(time.value)) { msg.className = "msg err"; msg.textContent = "날짜와 시작 시간을 골라주세요."; return; }
+    const id = g ? g.id : doc(collection(db, "gatherings")).id;
+    saveBtn.disabled = true; saveBtn.textContent = "저장 중…";
+    try {
+      await setDoc(doc(db, "gatherings", id), { title: t, date: date.value, time: time.value, memo: memo.value.trim(), updatedAt: serverTimestamp() });
+      closeEditor(); go("gather-" + id); toast(isNew ? "소집을 등록했어요." : "소집을 저장했어요.");
+    } catch (e) { saveBtn.disabled = false; saveBtn.textContent = isNew ? "소집 등록" : "수정 내용 저장"; msg.className = "msg err"; msg.textContent = errText(e); }
+  });
+  openSheet("조직 소집령", isNew ? "소집 등록" : "소집 수정", form);
+}
+
+/* ----- anonymous tips ----- */
+function screenTips() {
+  const ta = draft("textarea", "tip-text", { class: "gb-in", maxlength: "300", placeholder: "본부에 알릴 소식이나 고발할 혐의를 이름 없이 적어주세요" });
+  const f = h("form", { class: "panel", novalidate: true },
+    h("div", { class: "field-label", text: "익명으로 제보하기" }), ta,
+    h("p", { class: "hint", text: "보낸 사람 이름이나 계정은 저장되지 않아요. 두목이 확인하고 공개한 제보만 모두에게 보여요." }),
+    h("button", { type: "submit", class: "save", disabled: !S.user, text: "제보 보내기" }));
+  f.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    const t = ta.value.trim();
+    if (!t) { toast("제보 내용을 적어주세요."); return; }
+    try { await addDoc(collection(db, "tips"), { text: t, public: false, createdAt: serverTimestamp() }); S.drafts["tip-text"] = ""; render(); toast("제보를 보냈어요. 두목이 확인하면 공개돼요."); }
+    catch (e) { toast(errText(e)); }
+  });
+  const boss = isBoss();
+  const list = S.tips.filter(function (t) { return boss || t.public; });
+  return h("section", { class: "screen" },
+    h("button", { class: "back", type: "button", onclick: function () { go("hq"); }, text: "본부로" }),
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: "익명 제보함" }), h("h2", { text: "제보함" }),
+        h("p", { text: boss ? "두목 화면이에요. 비공개 제보도 보여요." : "공개된 제보 " + list.length + "건" }))),
+    f,
+    list.length ? h("ul", { class: "gb-list" }, list.map(function (t) {
+      return h("li", { class: "tip-item" + (t.public ? "" : " hidden-tip") },
+        h("div", { class: "gb-meta" }, h("b", { text: "익명 제보" }), boss ? h("span", { class: "gb-rank", text: t.public ? "공개" : "비공개" }) : null,
+          h("span", { class: "gb-time", text: timeAgo(t.createdAt) })),
+        h("p", { class: "gb-text", text: t.text }),
+        boss ? h("div", { class: "gb-del" },
+          h("button", { type: "button", class: "link-btn", onclick: async function () { try { await updateDoc(doc(db, "tips", t.id), { public: !t.public }); } catch (e) { toast(errText(e)); } }, text: t.public ? "숨기기" : "공개하기" }),
+          h("button", { type: "button", class: "link-btn danger", onclick: async function () { try { await deleteDoc(doc(db, "tips", t.id)); } catch (e) { toast(errText(e)); } }, text: "삭제" })) : null);
+    })) : h("div", { class: "empty", text: S.tipsReady ? (boss ? "아직 들어온 제보가 없어요." : "아직 공개된 제보가 없어요.") : "제보함을 여는 중…" }));
+}
+
 /* ---------- screens: HQ ---------- */
 function screenHQ() {
   const n = S.members.length;
@@ -609,6 +992,7 @@ function screenHQ() {
       h("div", { class: "stamp", "aria-hidden": "true", text: "극비" }),
       h("div", { class: "cover-title" }, logo("logo-l"), h("h1", null, h("span", { text: "불주먹조직" }), "비밀본부")),
       h("p", { class: "motto" }, h("q", { text: MOTTO }), h("small", { text: "조직 강령 제1조" }))),
+    briefing(),
     h("div", { class: "actions" },
       h("button", { class: "btn primary", type: "button", onclick: function () { go("members"); } },
         h("span", null, h("small", { text: "명부 열람" }), "조직원 보기"), h("span", { class: "arr", text: "→" })),
@@ -723,7 +1107,12 @@ function screenDetail(id) {
       h("p", { class: "statement", text: m.intro ? "“" + m.intro + "”" : "진술을 거부하고 있음." })),
     h("div", { class: "field" },
       h("div", { class: "field-label", text: "혐의 " + charges.length + "건" }),
-      charges.length ? h("ol", { class: "charges" }, charges.map(function (c) { return h("li", { text: c }); }))
+      charges.length ? h("ol", { class: "charges" }, charges.map(function (c) {
+        const idx = (m.charges || []).indexOf(c), rel = casesForCharge(m.id, c);
+        return h("li", null, h("div", { class: "ch-body" }, h("span", { text: c }),
+          rel.length ? h("button", { type: "button", class: "case-link", onclick: function () { go(rel.length === 1 ? "case-" + rel[0].id : "cases-" + m.id + "-" + idx); } },
+            "📁 관련 사건 보기" + (rel.length > 1 ? " (" + rel.length + "건)" : "")) : null));
+      }))
         : h("p", { class: "statement", text: "아직 드러난 혐의 없음. 수사 중." })),
     m.sample ? h("div", { class: "draft-note", text: "임시 기록 · 두목이 곧 채울 예정" }) : null,
     h("div", { class: "stamp", "aria-hidden": "true", text: "확인" }),
@@ -2732,6 +3121,7 @@ function draw() {
   const logState = oldLog ? { top: oldLog.scrollTop, pinned: oldLog.scrollHeight - oldLog.scrollTop - oldLog.clientHeight < 60 } : null;
 
   const r = currentRoute();
+  ensureTipsSub();
   let tab = "hq", view;
   if (!S.membersReady) {
     view = h("section", { class: "screen" }, h("div", { class: "empty", text: "본부 문을 여는 중…" }));
@@ -2747,6 +3137,12 @@ function draw() {
   else if (r === "game-smoke") { tab = "games"; view = screenSmokeLobby(); }
   else if (r.indexOf("room-") === 0) { tab = "games"; view = screenRoom(r.slice(5)); }
   else if (r === "guestbook") { tab = "guestbook"; view = screenGuestbook(); }
+  else if (r === "cases") view = screenCases();
+  else if (r.indexOf("cases-") === 0) { const parts = r.slice(6).split("-"); const idx = +parts.pop(); view = screenCases(parts.join("-"), idx); }
+  else if (r.indexOf("case-") === 0) view = screenCase(r.slice(5));
+  else if (r === "gather") view = screenGathers();
+  else if (r.indexOf("gather-") === 0) view = screenGather(r.slice(7));
+  else if (r === "tips") view = screenTips();
   else view = screenHQ();
   if (r.indexOf("room-") !== 0) { watchRoom(null); skWatch(null); smWatch(null); }
   if (r !== lastRoute) S.confirmDelete = false;
