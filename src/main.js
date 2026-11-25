@@ -2102,7 +2102,7 @@ function skChat(r, me, iDraw) {
 const SMDUR = { ready: 3, play: 40, shot: 5 };
 if (FAST) Object.keys(SMDUR).forEach(function (k) { SMDUR[k] = Math.max(2, Math.round(SMDUR[k] / FAST)); });
 const SM = {
-  fill: 0.75,     /* lungs per second while inhaling: full (and coughing) after ~1.3 s */
+  fill: 0.6,      /* lungs per second while inhaling: full (and coughing) after ~1.7 s */
   drain: 0.7,     /* lungs per second while exhaling */
   burn: 5,        /* % of the cigarette per second while inhaling */
   deep: 0.6,      /* from here inhaling burns faster */
