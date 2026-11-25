@@ -264,3 +264,7 @@ img { max-width: 100%; }
 .bc.done .bc-body, .bc.done .bc-ember { display: none; }
 .bc-ash { flex: 1; height: 2px; background: repeating-linear-gradient(90deg, rgba(141, 139, 134, 0.35) 0 4px, transparent 4px 8px); }
 .sm-pct { font: 600 14px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.ledger .led { display: grid; gap: 2px; padding: 12px; text-align: left; background: transparent; border: 0; color: var(--fg); min-width: 0; }
+.ledger .led + .led { border-left: 1px solid var(--line); }
+.ledger .led:hover, .ledger .led:active { background: var(--raised); }
+.ledger .led span { overflow-wrap: anywhere; }
