@@ -150,8 +150,36 @@ function ac() {
   return SND.ctx;
 }
 /* phones only allow sound after the viewer touches the page; iPhone also wants a sound played during that touch */
+/* iPhone: while a (silent) <audio> element plays, Safari treats the page as media playback, so the
+   ring/silent switch no longer mutes our Web Audio sounds. Works on older iOS and in home-screen apps too. */
+const IOS_AUDIO = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+function silentWavUrl() {
+  const rate = 8000, n = rate * 2, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  function str(o, t) { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); }
+  str(0, "RIFF"); v.setUint32(4, 36 + n, true); str(8, "WAVE"); str(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true); str(36, "data"); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+function mediaKeepAlive(play) {
+  if (!IOS_AUDIO) return;
+  try {
+    if (!SND.tag) {
+      if (!play) return;
+      const a = document.createElement("audio");
+      a.src = silentWavUrl(); a.loop = true; a.preload = "auto";
+      a.setAttribute("playsinline", ""); a.setAttribute("webkit-playsinline", ""); a.setAttribute("x-webkit-airplay", "deny");
+      a.disableRemotePlayback = true;
+      SND.tag = a;
+    }
+    if (play) { if (SND.tag.paused) { const pr = SND.tag.play(); if (pr && pr.catch) pr.catch(function () {}); } }
+    else if (!SND.tag.paused) SND.tag.pause();
+  } catch (e) {}
+}
 function unlockAudio() {
   if (!SND.on) return;
+  mediaKeepAlive(true);
   const c = ac(); if (!c) return;
   if (SND.unlocked && c.state === "running") return;
   try {
@@ -163,7 +191,10 @@ function unlockAudio() {
 ["pointerdown", "touchstart", "touchend", "click", "keydown"].forEach(function (ev) {
   document.addEventListener(ev, unlockAudio, { passive: true, capture: true });
 });
-document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && SND.ctx && SND.on) ac(); });
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") { if (SND.ctx && SND.on) { ac(); mediaKeepAlive(true); } }
+  else mediaKeepAlive(false);
+});
 function noiseBuf(c) {
   if (!SND.buf) {
     const b = c.createBuffer(1, Math.floor(c.sampleRate * 1.5), c.sampleRate), d = b.getChannelData(0);
@@ -3829,7 +3860,7 @@ const soundBtn = h("button", { type: "button", class: "snd-btn", "aria-label": S
 function setSound(on) {
   SND.on = on;
   try { localStorage.setItem("bf-sound", on ? "on" : "off"); } catch (e) {}
-  if (!on) breathStop(); else { ac(); sfx("pop"); }
+  if (!on) { breathStop(); mediaKeepAlive(false); } else { mediaKeepAlive(true); ac(); sfx("ding"); }
   soundBtn.textContent = on ? "🔊" : "🔇";
   soundBtn.setAttribute("aria-label", on ? "소리 끄기" : "소리 켜기");
   toast(on ? "효과음을 켰어요." : "효과음을 껐어요.");
