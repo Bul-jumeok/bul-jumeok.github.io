@@ -602,7 +602,10 @@ function screenHQ() {
         h("span", null, h("small", { text: "휴게 구역" }), "게임방"), h("span", { class: "arr", text: "→" }))),
     h("div", { class: "ledger" },
       h("button", { type: "button", class: "led", onclick: function () { go("members"); } }, h("b", { text: String(n) }), h("span", { text: "등록 조직원 →" })),
-      h("button", { type: "button", class: "led", onclick: function () { go("games"); } }, h("b", { text: String(openRooms) }), h("span", { text: "열린 게임방 →" })),
+      h("button", { type: "button", class: "led", onclick: function () {
+        const open = S.rooms.filter(roomAlive);
+        go(open.length === 1 ? "room-" + open[0].id : open.length ? "rooms" : "games");
+      } }, h("b", { text: String(openRooms) }), h("span", { text: "열린 게임방 →" })),
       h("button", { type: "button", class: "led", onclick: function () { go("guestbook"); } }, h("b", { text: String(S.guest.length) }), h("span", { text: "방명록 →" }))),
     h("details", { class: "guide" },
       h("summary", { text: "본부를 홈 화면에 두는 법" }),
@@ -742,6 +745,30 @@ const GAMES = [
   { id: "sketch", code: "G-05", name: "드로잉퀴즈", desc: "한 명은 그리고, 나머지는 맞혀라.", ready: true },
   { id: "smoke", code: "G-06", name: "빨리 담배피기", desc: "들숨 날숨 타이밍 싸움. 꼴찌는 킬러가 처리한다.", ready: true }
 ];
+const GAME_NAME = { liar: "라이어", mafia: "마피아", sketch: "드로잉퀴즈", smoke: "빨리 담배피기" };
+function screenOpenRooms() {
+  const me = meMember();
+  const rooms = S.rooms.filter(roomAlive);
+  return h("section", { class: "screen" },
+    h("button", { class: "back", type: "button", onclick: function () { go("hq"); }, text: "본부로" }),
+    h("div", { class: "sec-head" },
+      h("div", null, h("span", { class: "eyebrow", text: "지금 열린 방" }), h("h2", { text: "열린 게임방 " + rooms.length + "개" }),
+        h("p", { text: "누르면 바로 들어가요." }))),
+    rooms.length
+      ? h("ul", { class: "room-list" }, rooms.map(function (r) {
+          const mine = me && (r.players || []).indexOf(me.id) >= 0;
+          const label = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : "게임 중";
+          return h("li", null, h("button", { type: "button", class: "room-item", onclick: function () { go("room-" + r.id); } },
+            h("span", { class: "ri-main" },
+              h("b", { text: (GAME_NAME[r.type || "liar"] || "게임") + " · " + nickOf(r.createdBy) + "의 방" }),
+              h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
+            h("span", { class: "ri-side" },
+              h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
+              h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+        }))
+      : h("div", { class: "empty", text: "지금 열린 방이 없어요. 게임방에서 새 방을 만들어 보세요." }),
+    h("button", { type: "button", class: "ghost wide", onclick: function () { go("games"); }, text: "게임방으로 가기" }));
+}
 function screenGames() {
   return h("section", { class: "screen" },
     h("div", { class: "sec-head" },
@@ -2665,6 +2692,7 @@ function draw() {
   } else if (r === "members") { tab = "members"; view = screenMembers(); }
   else if (r.indexOf("m-") === 0) { tab = "members"; view = screenDetail(r.slice(2)); }
   else if (r === "games") { tab = "games"; view = screenGames(); }
+  else if (r === "rooms") { tab = "games"; view = screenOpenRooms(); }
   else if (r === "game-liar") { tab = "games"; view = screenLiarLobby(); }
   else if (r === "game-mafia") { tab = "games"; view = screenMafiaLobby(); }
   else if (r === "game-sketch") { tab = "games"; view = screenSketchLobby(); }
