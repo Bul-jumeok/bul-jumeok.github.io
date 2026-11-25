@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import LOGO from "./logo.txt";
 import { AQ_BANK } from "./assoc_bank.js";
+import { SK_MORE } from "./sketch_words.js";
 
 /* ---------- Firebase ---------- */
 const firebaseConfig = {
@@ -630,7 +631,7 @@ function subscribeBase() {
   }, function () { S.roomsReady = true; render(); });
 }
 /* ---------- room presence: a room with nobody looking at it disappears from the lists ---------- */
-const ALIVE_MS = 60000, PRESENT_MS = 45000;
+const ALIVE_MS = 60000, PRESENT_MS = 90000;
 let beatT = null;
 function tsMs(t) { return t && t.toMillis ? t.toMillis() : 0; }
 function roomAlive(r) {
@@ -642,9 +643,11 @@ function roomAlive(r) {
 }
 /* players who are actually in the room right now (falls back to everyone if presence is unknown) */
 function presentPlayers(r) {
-  const seen = r.seen || {}, now = Date.now(), here = {};
-  let known = false;
-  Object.keys(seen).forEach(function (k) { const v = seen[k]; if (v && v.m) { known = true; if (now - tsMs(v.t) < PRESENT_MS) here[v.m] = true; } });
+  const seen = r.seen || {}, here = {};
+  let known = false, ref = 0;
+  /* compare heartbeats with the newest one (all server time), so a phone with a wrong clock can't drop people */
+  Object.keys(seen).forEach(function (k) { const v = seen[k]; if (v && v.m) ref = Math.max(ref, tsMs(v.t)); });
+  Object.keys(seen).forEach(function (k) { const v = seen[k]; if (v && v.m) { known = true; if (ref - tsMs(v.t) < PRESENT_MS) here[v.m] = true; } });
   return (r.players || []).filter(function (p) { return !!findMember(p) && (!known || here[p]); });
 }
 function beat(id) {
@@ -658,7 +661,8 @@ function unbeat(id) {
 }
 document.addEventListener("visibilitychange", function () {
   if (!S.roomId) return;
-  if (document.visibilityState === "visible") beat(S.roomId); else unbeat(S.roomId);
+  /* switching to KakaoTalk for a moment must not drop you from the next game: only beat again when back */
+  if (document.visibilityState === "visible") beat(S.roomId);
 });
 window.addEventListener("pagehide", function () { if (S.roomId) unbeat(S.roomId); });
 /* lists drop rooms that went quiet even when nothing else changes */
@@ -2807,6 +2811,7 @@ function screenAssocRoom(r) {
   const lineup = playing ? (r.lineup || []) : players;
   if (playing && r.status !== "result" && !r.cur) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "게임 정보를 읽지 못했어요." }),
     h("button", { type: "button", class: "ghost wide", onclick: backToLobby, text: "대기실로 돌리기" }));
+  if (needsLateJoin(r)) lateJoin(r);
   const scores = r.scores || {}, solved = r.solved || [], tries = r.tries || {};
   const title = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : ((r.qn || 0) + 1) + " / " + (r.total || 5) + "번째 문제";
   const head = h("div", { class: "room-head" },
@@ -2898,9 +2903,11 @@ const SK_WORDS = ["소나기", "번지점프", "블랙홀", "피라미드", "엘
   "소개팅", "결혼식", "돌잔치", "졸업식", "수능", "월요병", "불금", "월급날", "잠꼬대", "코골이", "하품", "재채기",
   "딸꾹질", "방귀", "윙크", "만세", "가위바위보", "팔씨름", "줄넘기", "훌라후프", "스카이다이빙", "서핑", "스키점프",
   "컬링", "양궁", "펜싱", "인공위성", "현미경", "나침반", "모래시계", "사다리", "그네", "미끄럼틀", "시소", "분수대"];
+SK_MORE.forEach(function (w) { if (SK_WORDS.indexOf(w) < 0) SK_WORDS.push(w); });
 const PAPER = "#f3f1ec";
-const INKS = ["#1b1b1d", "#d2382f", "#2f6fd2", "#2f9e57", "#e2a21b", "#8a4fc9", "#8b5a2b"];
-const SK = { canvas: null, ctx: null, turnKey: null, unsub: null, strokes: [], drawing: false, pendingRender: false, cur: null, color: INKS[0], size: 8, eraser: false, flushT: null };
+const INKS = ["#1b1b1d", "#7a7a7a", "#ffffff", "#d2382f", "#ff7eb6", "#f07a1a", "#e2a21b", "#f4d35e", "#2f9e57", "#9ad35a", "#2f6fd2", "#6ec6f0", "#8a4fc9", "#8b5a2b", "#f2c6a0"];
+const SK = { canvas: null, ctx: null, turnKey: null, unsub: null, strokes: [], drawing: false, pendingRender: false, cur: null, color: INKS[0], size: 8, eraser: false, flushT: null, line: false, sliding: false };
+try { const v = +localStorage.getItem("bf-pen"); if (v >= 2 && v <= 40) SK.size = v; } catch (e) {}
 
 /* Surprise names: never announced in the UI. Default list until the boss saves one. */
 const SK_DEFAULT_NAMES = ["주먹이", "연상퀴즈", "올라올라", "서바이벌꼬로록"];
@@ -2937,6 +2944,30 @@ function skHint(word, showCho) {
     return "○";
   }).join("");
 }
+/* someone in the room who was left out of this game (e.g. was in another app when it started) joins it */
+const LATE = {};
+async function lateJoin(r) {
+  const me = meMember(); if (!me || !S.user) return;
+  const key = r.id + ":" + (r.game || 0) + ":" + me.id;
+  if (LATE[key]) return; LATE[key] = 1;
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const rr = snap.data();
+      if (!rr || rr.status === "lobby" || rr.status === "result" || rr.status === "closed") return;
+      if ((rr.players || []).indexOf(me.id) < 0 || (rr.lineup || []).indexOf(me.id) >= 0) return;
+      const patch = { lineup: (rr.lineup || []).concat([me.id]) };
+      if (rr.type === "sketch") patch.order = (rr.order || []).concat([me.id]);
+      sysMsg(tx, rr, "👋 " + me.nick + "님이 게임에 합류했어요.");
+      tx.update(roomRef(), patch);
+    });
+  } catch (e) { delete LATE[key]; }
+}
+function needsLateJoin(r) {
+  const me = meMember();
+  return !!(me && (r.type === "sketch" || r.type === "assoc") && r.status !== "lobby" && r.status !== "result"
+    && (r.players || []).indexOf(me.id) >= 0 && (r.lineup || []).indexOf(me.id) < 0);
+}
+function skRounds(r) { return [3, 5, 8, 10].indexOf(r.rounds) >= 0 ? r.rounds : 3; }
 function skDrawer(r) { return r.order[r.turn % r.order.length]; }
 function skTotal(r) { return r.order.length * (r.rounds || 1); }
 function skTurnKey(r) { return (r.game || 0) * 1000 + (r.turn || 0); }
@@ -2955,7 +2986,7 @@ async function startSketch() {
       sysMsg(tx, { game: game }, "🎨 드로잉퀴즈 시작! 첫 번째 화가는 " + nickOf(order[0]) + "님이에요.");
       tx.update(roomRef(), nextPhase(r, {
         status: "draw", lineup: lineup, order: order, turn: 0, word: word, used: [word], guessed: [], scores: {},
-        skipUsed: false, game: game, startedAt: serverTimestamp()
+        skipUsed: false, game: game, startedAt: serverTimestamp(), rounds: skRounds(r), stars: {}, starGiven: []
       }));
     });
   } catch (e) {
@@ -3042,7 +3073,8 @@ function skCanvas() {
   c.addEventListener("pointerdown", skDown);
   c.addEventListener("pointermove", skMove);
   ["pointerup", "pointercancel"].forEach(function (ev) { c.addEventListener(ev, skUp); });
-  SK.canvas = c; SK.ctx = c.getContext("2d");
+  c.addEventListener("contextmenu", function (e) { e.preventDefault(); });   /* Ctrl+click on a Mac */
+  SK.canvas = c; SK.ctx = c.getContext("2d", { willReadFrequently: true });
   if (window.ResizeObserver) new ResizeObserver(skResize).observe(c);
   return c;
 }
@@ -3051,6 +3083,33 @@ function skResize() {
   if (!w) return;
   const px = Math.round(w * Math.min(2, window.devicePixelRatio || 1));
   if (c.width !== px) { c.width = px; c.height = px; skRedraw(); }
+}
+/* paint bucket: fill the touching area of the same color (small tolerance for soft line edges) */
+function hexRgb(c) { const n = parseInt(String(c).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function skFillAt(st) {
+  const c = SK.canvas, x = SK.ctx; if (!c || !c.width || !st.pts || st.pts.length < 2) return;
+  const W = c.width, H = c.height, k = W / 1000;
+  const sx = Math.min(W - 1, Math.max(0, Math.round(st.pts[0] * k))), sy = Math.min(H - 1, Math.max(0, Math.round(st.pts[1] * k)));
+  let img;
+  try { img = x.getImageData(0, 0, W, H); } catch (e) { return; }
+  const d = img.data, at = (sy * W + sx) * 4, r0 = d[at], g0 = d[at + 1], b0 = d[at + 2];
+  const fc = hexRgb(st.color);
+  if (Math.abs(fc[0] - r0) + Math.abs(fc[1] - g0) + Math.abs(fc[2] - b0) < 6) return;
+  const TOL = 110, seen = new Uint8Array(W * H), stack = [sy * W + sx];
+  function same(i) { const j = i * 4; return Math.abs(d[j] - r0) + Math.abs(d[j + 1] - g0) + Math.abs(d[j + 2] - b0) <= TOL; }
+  while (stack.length) {
+    const i = stack.pop();
+    if (seen[i]) continue;
+    seen[i] = 1;
+    if (!same(i)) continue;
+    const j = i * 4; d[j] = fc[0]; d[j + 1] = fc[1]; d[j + 2] = fc[2]; d[j + 3] = 255;
+    const px = i % W;
+    if (px > 0) stack.push(i - 1);
+    if (px < W - 1) stack.push(i + 1);
+    if (i >= W) stack.push(i - W);
+    if (i < W * (H - 1)) stack.push(i + W);
+  }
+  x.putImageData(img, 0, 0);
 }
 function skSeg(x, k, s) {
   const p = s.pts;
@@ -3070,7 +3129,7 @@ function skRedraw() {
   const k = c.width / 1000;
   let start = 0;
   SK.strokes.forEach(function (st, i) { if (st.clear) start = i + 1; });
-  SK.strokes.slice(start).forEach(function (st) { skSeg(x, k, st); });
+  SK.strokes.slice(start).forEach(function (st) { if (st.fill) skFillAt(st); else skSeg(x, k, st); });
   if (SK.cur) skSeg(x, k, SK.cur);
 }
 function skWatch(key) {
@@ -3098,6 +3157,7 @@ let skSeq = 0;
 function skFlush(final) {
   const cur = SK.cur;
   if (!cur || cur.pts.length < 2) return;
+  if (cur.line && !final) return;   /* a straight line is sent once, when you let go */
   if (!final && cur.pts.length < 4) return;
   const chunk = { uid: myUid(), turn: SK.turnKey, color: cur.color, size: cur.size, pts: cur.pts.slice(0, 600), t: Date.now() * 1000 + (skSeq++ % 1000), createdAt: serverTimestamp() };
   SK.strokes.push(chunk);
@@ -3110,7 +3170,18 @@ function skDown(e) {
   e.preventDefault();
   try { SK.canvas.setPointerCapture(e.pointerId); } catch (err) {}
   SK.drawing = true;
-  SK.cur = { color: SK.eraser ? PAPER : SK.color, size: SK.eraser ? 28 : SK.size, pts: skPoint(e) };
+  const p0 = skPoint(e);
+  /* paint bucket: Ctrl (⌘ on a Mac) + click, or the 채우기 button */
+  if (e.ctrlKey || e.metaKey || SK.fill) {
+    const chunk = { uid: myUid(), turn: SK.turnKey, fill: true, color: SK.eraser ? PAPER : SK.color, size: 0, pts: p0, t: Date.now() * 1000 + (skSeq++ % 1000), createdAt: serverTimestamp() };
+    SK.strokes.push(chunk); skFillAt(chunk);
+    addDoc(collection(db, "rooms", S.roomId, "strokes"), chunk).catch(function (err) { toast(errText(err)); });
+    sfx("pop");
+    return;
+  }
+  /* straight line: Shift on a computer, or the 직선 button */
+  const line = !!(e.shiftKey || SK.line);
+  SK.cur = { color: SK.eraser ? PAPER : SK.color, size: SK.eraser ? Math.max(16, SK.size * 2) : SK.size, pts: line ? [p0[0], p0[1], p0[0], p0[1]] : p0, line: line };
   skRedraw();
   clearInterval(SK.flushT);
   SK.flushT = setInterval(function () { skFlush(false); }, 250);
@@ -3118,6 +3189,14 @@ function skDown(e) {
 function skMove(e) {
   if (!SK.drawing || !SK.cur) return;
   e.preventDefault();
+  if (SK.cur.line) { const q = skPoint(e); SK.cur.pts[2] = q[0]; SK.cur.pts[3] = q[1]; skRedraw(); return; }
+  if (e.shiftKey && SK.cur.pts.length >= 2) {
+    /* Shift pressed in the middle of a stroke: keep what was drawn, continue as a straight line from here */
+    const c0 = SK.cur, lx0 = c0.pts[c0.pts.length - 2], ly0 = c0.pts[c0.pts.length - 1];
+    if (c0.pts.length >= 4) skFlush(true);
+    SK.cur = { color: c0.color, size: c0.size, pts: [lx0, ly0, lx0, ly0], line: true };
+    return;
+  }
   const p = skPoint(e), pts = SK.cur.pts, lx = pts[pts.length - 2], ly = pts[pts.length - 1];
   if (Math.abs(p[0] - lx) + Math.abs(p[1] - ly) < 4) return;
   pts.push(p[0], p[1]);
@@ -3139,17 +3218,39 @@ async function skClear() {
 }
 function skTools() {
   const swatches = INKS.map(function (c) {
-    return h("button", { type: "button", class: "sk-ink", style: "background:" + c, "aria-label": "색 " + c,
+    return h("button", { type: "button", class: "sk-ink" + (c === "#ffffff" ? " light" : ""), style: "background:" + c, "aria-label": "색 " + c,
       "aria-pressed": !SK.eraser && SK.color === c ? "true" : "false", onclick: function () { SK.color = c; SK.eraser = false; render(); } });
   });
+  const dot = h("span", { class: "sk-dot" });
+  function paintDot() {
+    const d = Math.max(3, Math.min(34, SK.eraser ? Math.max(16, SK.size * 2) * 0.8 : SK.size * 0.8));
+    dot.style.width = dot.style.height = d + "px";
+    dot.style.background = SK.eraser ? PAPER : SK.color;
+  }
+  paintDot();
+  const num = h("b", { class: "sk-size-num", text: String(SK.size) });
+  const slider = h("input", { type: "range", class: "sk-size", min: "2", max: "40", step: "1", value: String(SK.size), "aria-label": "펜 굵기" });
+  slider.addEventListener("pointerdown", function () { SK.sliding = true; });
+  slider.addEventListener("input", function () { SK.size = +slider.value; num.textContent = slider.value; paintDot(); });
+  function done() {
+    SK.sliding = false;
+    try { localStorage.setItem("bf-pen", String(SK.size)); } catch (e) {}
+    if (SK.pendingRender) { SK.pendingRender = false; render(); }
+  }
+  slider.addEventListener("change", done);
+  slider.addEventListener("pointerup", done);
   return h("div", { class: "sk-tools" },
-    h("div", { class: "sk-row" }, swatches),
+    h("div", { class: "sk-row sk-inks" }, swatches),
     h("div", { class: "sk-row" },
-      [["가늘게", 4], ["보통", 8], ["굵게", 16]].map(function (o) {
-        return h("button", { type: "button", class: "sk-btn", "aria-pressed": !SK.eraser && SK.size === o[1] ? "true" : "false", onclick: function () { SK.size = o[1]; SK.eraser = false; render(); }, text: o[0] });
-      }),
-      h("button", { type: "button", class: "sk-btn", "aria-pressed": SK.eraser ? "true" : "false", onclick: function () { SK.eraser = true; render(); }, text: "지우개" }),
-      h("button", { type: "button", class: "sk-btn danger", onclick: skClear, text: "전체 지우기" })));
+      h("span", { class: "sk-size-lbl", text: "굵기" }), slider, h("span", { class: "sk-dot-box" }, dot), num),
+    h("div", { class: "sk-row" },
+      h("button", { type: "button", class: "sk-btn", "aria-pressed": SK.line ? "true" : "false", title: "컴퓨터에서는 Shift를 누른 채 그어도 직선이 돼요",
+        onclick: function () { SK.line = !SK.line; if (SK.line) SK.fill = false; render(); }, text: "📏 직선" }),
+      h("button", { type: "button", class: "sk-btn", "aria-pressed": SK.fill ? "true" : "false", title: "컴퓨터에서는 Ctrl(맥은 ⌘)을 누른 채 클릭해도 채워져요",
+        onclick: function () { SK.fill = !SK.fill; if (SK.fill) SK.line = false; render(); }, text: "🪣 채우기" }),
+      h("button", { type: "button", class: "sk-btn", "aria-pressed": SK.eraser ? "true" : "false", onclick: function () { SK.eraser = !SK.eraser; render(); }, text: "지우개" }),
+      h("button", { type: "button", class: "sk-btn danger", onclick: skClear, text: "전체 지우기" })),
+    IS_MOBILE ? null : h("p", { class: "sk-tip", text: "💡 Shift + 드래그 = 직선 · " + (IS_MAC ? "⌘" : "Ctrl") + " + 클릭 = 그 영역 색 채우기" }));
 }
 
 function screenSketchLobby() {
@@ -3224,6 +3325,7 @@ function screenSketchRoom(r) {
   const lineup = playing ? (r.lineup || []) : players;
   if (playing && (!r.order || !r.order.length)) return h("section", { class: "screen" }, back, h("div", { class: "empty", text: "게임 정보를 읽지 못했어요." }),
     h("button", { type: "button", class: "ghost wide", onclick: backToLobby, text: "대기실로 돌리기" }));
+  if (needsLateJoin(r)) lateJoin(r);
   skWatch(r.status === "draw" || r.status === "reveal" ? skTurnKey(r) : null);
   const scores = r.scores || {};
   const drawer = playing && r.order ? skDrawer(r) : null;
@@ -3233,7 +3335,7 @@ function screenSketchRoom(r) {
   const title = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : (r.turn + 1) + " / " + skTotal(r) + "번째 그림";
   const head = h("div", { class: "room-head" },
     h("div", null, h("span", { class: "eyebrow", text: "드로잉퀴즈 · " + nickOf(r.createdBy) + "의 방" }), h("h2", { text: title })),
-    h("span", { class: "mode-chip", text: (r.rounds || 1) + "바퀴" }));
+    h("span", { class: "mode-chip", text: (playing ? (r.rounds || 1) : skRounds(r)) + "바퀴" }));
   const chips = h("div", { class: "chips" }, lineup.slice().sort(function (a, b) { return (scores[b] || 0) - (scores[a] || 0); }).map(function (p) {
     const ok = guessed.indexOf(p) >= 0;
     return h("span", { class: "chip static" + (me && p === me.id ? " me" : "") + (ok ? " done" : "") },
@@ -3259,12 +3361,13 @@ function screenSketchRoom(r) {
     const said = skSaid(r);
     const left = [], right = [];
     lineup.forEach(function (p, i) { (i % 2 ? right : left).push(skAvatar(p, i % 2 ? "r" : "l", r, said)); });
+    skFloatNew(r);
     body = [info,
       h("div", { class: "sk-arena" },
         h("div", { class: "sk-side" }, left),
-        h("div", { class: "sk-stage" + (iDraw ? " drawing" : "") }, skCanvas()),
+        h("div", { class: "sk-stage" + (iDraw ? " drawing" : "") }, h("div", { class: "sk-canvas-wrap" }, skCanvas(), skFloatLayer())),
         h("div", { class: "sk-side" }, right)),
-      iDraw ? skTools() : null];
+      iDraw ? skTools() : skReactBar(r, me)];
   }
   const res = h("section", { class: "screen room" }, back, head,
     playing && r.status !== "result" ? null : h("div", { class: "field" }, h("div", { class: "field-label", text: playing ? "점수" : "모인 사람 " + lineup.length + "명" }), chips),
@@ -3272,8 +3375,65 @@ function screenSketchRoom(r) {
   requestAnimationFrame(skResize);
   return res;
 }
+/* reactions while someone draws: faces, thumbs up / down, and a star for a good drawing */
+const REACTS = ["😂", "😮", "😍", "🤔", "👍", "👎", "🔥"];
+let reactAt = 0;
+async function skReact(e) {
+  if (Date.now() - reactAt < 600) return;
+  reactAt = Date.now();
+  try { await sendMsg("react", e); } catch (err) { toast(errText(err)); }
+}
+async function skStar() {
+  const me = meMember(), r = S.room; if (!me || !r) return;
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const rr = snap.data();
+      if (!rr || (rr.status !== "draw" && rr.status !== "reveal") || rr.turn !== r.turn || rr.game !== r.game) throw { code: "late" };
+      const drawer = skDrawer(rr), key = skTurnKey(rr) + ":" + me.id, given = rr.starGiven || [];
+      if (drawer === me.id) throw { code: "self" };
+      if (given.indexOf(key) >= 0) throw { code: "again" };
+      const stars = Object.assign({}, rr.stars || {});
+      stars[drawer] = (stars[drawer] || 0) + 1;
+      tx.update(roomRef(), { stars: stars, starGiven: given.concat([key]).slice(-400) });
+      tx.set(doc(collection(db, "rooms", S.roomId, "msgs")), { uid: myUid(), memberId: me.id, nick: me.nick, text: "⭐", kind: "react", game: rr.game || 0, createdAt: serverTimestamp() });
+    });
+    sfx("heal");
+  } catch (e) {
+    toast(e && e.code === "again" ? "이 그림에는 이미 별을 줬어요." : e && e.code === "self" ? "내 그림에는 별을 줄 수 없어요." : e && e.code === "late" ? "다음 그림으로 넘어갔어요." : errText(e));
+  }
+}
+function skReactBar(r, me) {
+  const isPlayer = me && (r.lineup || []).indexOf(me.id) >= 0;
+  if (!isPlayer) return null;
+  const starred = (r.starGiven || []).indexOf(skTurnKey(r) + ":" + me.id) >= 0;
+  return h("div", { class: "sk-react" },
+    REACTS.map(function (e) { return h("button", { type: "button", class: "sk-re", "aria-label": "반응 " + e, onclick: function () { skReact(e); }, text: e }); }),
+    h("button", { type: "button", class: "sk-re star" + (starred ? " done" : ""), disabled: starred, onclick: skStar, text: starred ? "⭐ 별 줬어요" : "⭐ 별 주기" }));
+}
+/* emojis float up over the drawing; the layer survives re-renders so animations aren't cut */
+const FLOAT_SEEN = {};
+function skFloatLayer() {
+  if (!SK.floats) SK.floats = h("div", { class: "sk-floats", "aria-hidden": "true" });
+  return SK.floats;
+}
+function skFloatNew(r) {
+  const now = Date.now(), game = r.game || 0, layer = skFloatLayer();
+  S.msgs.forEach(function (m) {
+    if (m.kind !== "react" || (m.game || 0) !== game || FLOAT_SEEN[m.id]) return;
+    FLOAT_SEEN[m.id] = 1;
+    const t = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : now;
+    if (now - t > 4000) return;
+    const el = h("span", { class: "sk-float" + (m.text === "⭐" ? " star" : ""), text: m.text });
+    el.style.left = (10 + Math.random() * 75) + "%";
+    el.style.animationDuration = (1.6 + Math.random() * 0.8) + "s";
+    layer.appendChild(el);
+    setTimeout(function () { el.remove(); }, 2600);
+  });
+}
 /* latest chat line per player, shown as a speech bubble for a few seconds */
 const SAY_MS = 6000;
+const SAY_SEEN = {};
+function sayFresh(id) { if (!id || SAY_SEEN[id]) return false; SAY_SEEN[id] = 1; return true; }
 function saidMap(r, kinds) {
   const out = {}, now = Date.now(), game = r.game || 0;
   let next = Infinity;
@@ -3281,17 +3441,13 @@ function saidMap(r, kinds) {
   S.msgs.forEach(function (m) {
     if ((m.game || 0) !== game || kinds.indexOf(m.kind) < 0 || !m.memberId) return;
     const t = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : now;
-    if (now - t < SAY_MS) { out[m.memberId] = { text: m.text, kind: m.kind }; next = Math.min(next, t + SAY_MS); }
+    if (now - t < SAY_MS) { out[m.memberId] = { text: m.text, kind: m.kind, fresh: sayFresh(m.id) }; next = Math.min(next, t + SAY_MS); }
   });
   clearTimeout(SK.sayT);
   if (next < Infinity) SK.sayT = setTimeout(render, Math.max(200, next - now + 100));
   return out;
 }
-function skSaid(r) {
-  const m = saidMap(r, ["chat"]), out = {};
-  Object.keys(m).forEach(function (k) { out[k] = m[k].text; });
-  return out;
-}
+function skSaid(r) { return saidMap(r, ["chat", "react"]); }
 /* characters in a row with what they just said in a bubble above their heads */
 function crewStage(lineup, said, state) {
   const me = meMember();
@@ -3299,7 +3455,7 @@ function crewStage(lineup, said, state) {
     const x = (state && state(p)) || {};
     const say = said[p];
     return h("div", { class: "st-av" + (me && p === me.id ? " me" : "") + (x.cls ? " " + x.cls : "") },
-      say ? h("span", { class: "st-say" + (say.kind === "guess" ? " wrong" : say.kind === "hint" ? " hint" : ""), text: (say.kind === "guess" ? "✗ " : "") + say.text }) : null,
+      say ? h("span", { class: "st-say" + (say.fresh ? " fresh" : "") + (say.kind === "guess" ? " wrong" : say.kind === "hint" ? " hint" : ""), text: (say.kind === "guess" ? "✗ " : "") + say.text }) : null,
       h("div", { class: "st-ph" }, photoBox(findMember(p) || {}), x.badge ? h("span", { class: "sk-badge" + (x.badgeCls ? " " + x.badgeCls : ""), text: x.badge }) : null),
       h("span", { class: "st-name", text: nickOf(p) }),
       x.sub != null ? h("span", { class: "st-sub", text: x.sub }) : null);
@@ -3321,18 +3477,19 @@ function skAvatar(p, side, r, said) {
   return h("div", { class: "sk-av " + side + (p === drawer ? " drawer" : "") + (ok ? " ok" : "") + (me && p === me.id ? " me" : "") },
     h("div", { class: "sk-av-ph" }, photoBox(findMember(p) || {}), p === drawer ? h("span", { class: "sk-badge", text: "🖌" }) : ok ? h("span", { class: "sk-badge ok", text: "✓" }) : null),
     h("span", { class: "sk-av-name", text: nickOf(p) }),
-    h("span", { class: "sk-av-score", text: ((r.scores || {})[p] || 0) + "점" }),
-    said[p] ? h("span", { class: "sk-say", text: said[p] }) : null);
+    h("span", { class: "sk-av-score", text: ((r.scores || {})[p] || 0) + "점" + ((r.stars || {})[p] ? " ⭐" + r.stars[p] : "") }),
+    said[p] ? h("span", { class: "sk-say" + (said[p].fresh ? " fresh" : ""), text: said[p].text }) : null);
 }
 function skLobbyPanel(r, me, inRoom, players) {
   function seg(field, value, label, def) {
-    return h("button", { type: "button", "aria-pressed": (r[field] || def) === value ? "true" : "false",
+    return h("button", { type: "button", "aria-pressed": (field === "rounds" ? skRounds(r) : (r[field] || def)) === value ? "true" : "false",
       onclick: function () { const p = {}; p[field] = value; roomUpdate(p); } }, label);
   }
   const n = players.length, enough = n >= 2;
   return h("div", { class: "panel" },
     h("div", { class: "field-label", text: "게임 설정 · 참가자 누구나 바꿀 수 있어요" }),
-    h("div", { class: "seg" }, seg("rounds", 1, "1바퀴", 1), seg("rounds", 2, "2바퀴", 1)),
+    h("div", { class: "field-label", text: "몇 바퀴 돌까요? (한 바퀴 = 모두 한 번씩 그리기)" }),
+    h("div", { class: "seg" }, seg("rounds", 3, "3바퀴", 3), seg("rounds", 5, "5바퀴", 3), seg("rounds", 8, "8바퀴", 3), seg("rounds", 10, "10바퀴", 3)),
     !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
       : inRoom
         ? h("div", { class: "op-row" },
@@ -3342,13 +3499,15 @@ function skLobbyPanel(r, me, inRoom, players) {
     h("p", { class: "hint", text: "단톡방에 ‘게임방 → 드로잉퀴즈에 방 열었어’라고 알려주세요." }));
 }
 function skResultPanel(r) {
-  const scores = r.scores || {};
+  const scores = r.scores || {}, stars = r.stars || {};
   const rank = (r.lineup || []).slice().sort(function (a, b) { return (scores[b] || 0) - (scores[a] || 0); });
   const medal = ["🥇", "🥈", "🥉"];
+  const starTop = (r.lineup || []).slice().sort(function (a, b) { return (stars[b] || 0) - (stars[a] || 0); })[0];
   return h("div", { class: "answer team" },
     h("div", { class: "result-title", text: nickOf(rank[0]) + " 우승!" }),
+    starTop && stars[starTop] ? h("p", { class: "sk-star-award", text: "⭐ 인기 화가상: " + nickOf(starTop) + " (별 " + stars[starTop] + "개)" }) : null,
     h("ul", { class: "role-list" }, rank.map(function (p, i) {
-      return h("li", null, h("span", { text: (medal[i] || (i + 1) + "등") + " " + nickOf(p) }), h("b", { text: (scores[p] || 0) + "점" }));
+      return h("li", null, h("span", { text: (medal[i] || (i + 1) + "등") + " " + nickOf(p) }), h("b", { text: (scores[p] || 0) + "점" + (stars[p] ? " · ⭐" + stars[p] : "") }));
     })),
     h("div", { class: "op-row" },
       h("button", { type: "button", onclick: function () { go("game-sketch"); }, text: "방 목록" }),
@@ -3356,7 +3515,7 @@ function skResultPanel(r) {
 }
 function skChat(r, me, iDraw) {
   const game = r.game || 0;
-  const msgs = S.msgs.filter(function (m) { return (m.game || 0) === game; });
+  const msgs = S.msgs.filter(function (m) { return (m.game || 0) === game && m.kind !== "react"; });
   const isPlayer = me && (r.lineup || []).indexOf(me.id) >= 0;
   const done = me && (r.guessed || []).indexOf(me.id) >= 0;
   let ph = "대화 보내기", enabled = true;
@@ -3381,7 +3540,7 @@ function skChat(r, me, iDraw) {
     S.drafts["chat-text"] = ""; inp.value = "";
     try { await skGuess(t); render(); } catch (e) { toast(e && e.code === "late" ? "아쉽게 시간이 지났어요." : errText(e)); }
   });
-  return h("div", { class: "field dock sk" + (iDraw ? " slim" : "") }, h("div", { class: "field-label", text: r.status === "draw" ? "정답 맞히기" : "대화" }), log, f);
+  return h("div", { class: "field dock sk" + (iDraw ? " slim drawer" : "") }, h("div", { class: "field-label", text: r.status === "draw" ? "정답 맞히기" : "대화" }), log, f);
 }
 
 
@@ -3974,7 +4133,7 @@ function render() {
   requestAnimationFrame(function () { queued = false; draw(); });
 }
 function draw() {
-  if (SK.drawing || SMK.holding) { SK.pendingRender = true; return; }
+  if (SK.drawing || SK.sliding || SMK.holding) { SK.pendingRender = true; return; }
   migrateCrewTopic();
   const active = document.activeElement;
   const aid = active && active.id && main.contains(active) ? active.id : null;
@@ -4023,6 +4182,7 @@ function draw() {
     }
   }
   document.body.classList.toggle("wide-room", r.indexOf("room-") === 0);
+  if (r !== lastRoute && view.classList) view.classList.add("enter");
   main.replaceChildren(view);
   requestAnimationFrame(fitBubbles);
   bgmSet(bgmMoodFor());

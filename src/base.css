@@ -434,6 +434,6 @@ details.guide[open] summary::after { content: "−"; }
   .pick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .screen { animation: rise 0.22s ease-out; }
+  .screen.enter { animation: rise 0.22s ease-out; }
   @keyframes rise { from { transform: translateY(6px); } to { transform: none; } }
 }
