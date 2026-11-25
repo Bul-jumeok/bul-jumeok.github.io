@@ -1230,7 +1230,7 @@ function chatBox(r, me) {
     const t = inp.value.trim(); if (!t || !S.user) return;
     try { await sendMsg("chat", t); S.drafts["chat-text"] = ""; render(); } catch (e) { toast(errText(e)); }
   });
-  return h("div", { class: "field" }, h("div", { class: "field-label", text: "대화" }), log, f);
+  return h("div", { class: "field dock" }, h("div", { class: "field-label", text: "대화" }), log, f);
 }
 
 
@@ -1674,17 +1674,21 @@ function mChat(r, ctx) {
     const t = inp.value.trim(); if (!t || !S.user || !kind) return;
     try { await sendMsg(kind, t); S.drafts["chat-text"] = ""; render(); } catch (e) { toast(errText(e)); }
   });
-  return h("div", { class: "field" }, h("div", { class: "field-label", text: ctx.myRole === "mafia" && r.status === "night" && ctx.iAlive ? "대화 · 지금은 마피아끼리만 보여요" : "대화" }), log, f);
+  return h("div", { class: "field dock" }, h("div", { class: "field-label", text: ctx.myRole === "mafia" && r.status === "night" && ctx.iAlive ? "대화 · 지금은 마피아끼리만 보여요" : "대화" }), log, f);
 }
 
 
 /* ---------- Sketch (드로잉퀴즈): drawing and guessing ---------- */
 const SDUR = { draw: 60, reveal: 5 };
 if (FAST) Object.keys(SDUR).forEach(function (k) { SDUR[k] = Math.max(2, Math.round(SDUR[k] / FAST)); });
-const SK_WORDS = ["사과", "바나나", "수박", "포도", "당근", "버섯", "고양이", "강아지", "기린", "코끼리", "문어", "상어", "거북이", "토끼", "펭귄", "공룡",
-  "자동차", "비행기", "자전거", "로켓", "우산", "안경", "시계", "피자", "햄버거", "아이스크림", "케이크", "눈사람", "해바라기", "선인장", "무지개",
-  "화산", "등대", "성", "기타", "피아노", "축구공", "왕관", "칫솔", "냉장고", "텐트", "선풍기", "망원경", "다이아몬드", "열쇠", "촛불", "유령",
-  "해적", "인어", "산타", "치킨", "라면", "삼겹살", "모자", "신발", "물고기", "달팽이", "나비", "번개", "눈사태"];
+const SK_WORDS = ["소나기", "번지점프", "블랙홀", "피라미드", "엘리베이터", "회전목마", "롤러코스터", "낙하산", "신호등", "자판기",
+  "정전기", "그림자", "메아리", "오로라", "도미노", "불꽃놀이", "숨바꼭질", "줄다리기", "잠수함", "등산", "김장", "세뱃돈",
+  "벼락치기", "지각", "야근", "다이어트", "짝사랑", "첫눈", "장마", "눈싸움", "모래성", "해돋이", "보름달", "별똥별",
+  "지진", "태풍", "빙하", "정글", "무인도", "풍차", "허수아비", "외계인", "좀비", "뱀파이어", "닌자", "보물지도",
+  "타임머신", "로봇청소기", "전자레인지", "셀카", "라이브방송", "택배", "배달", "오락실", "캠핑", "바비큐", "회식",
+  "소개팅", "결혼식", "돌잔치", "졸업식", "수능", "월요병", "불금", "월급날", "잠꼬대", "코골이", "하품", "재채기",
+  "딸꾹질", "방귀", "윙크", "만세", "가위바위보", "팔씨름", "줄넘기", "훌라후프", "스카이다이빙", "서핑", "스키점프",
+  "컬링", "양궁", "펜싱", "인공위성", "현미경", "나침반", "모래시계", "사다리", "그네", "미끄럼틀", "시소", "분수대"];
 const PAPER = "#f3f1ec";
 const INKS = ["#1b1b1d", "#d2382f", "#2f6fd2", "#2f9e57", "#e2a21b", "#8a4fc9", "#8b5a2b"];
 const SK = { canvas: null, ctx: null, turnKey: null, unsub: null, strokes: [], drawing: false, pendingRender: false, cur: null, color: INKS[0], size: 8, eraser: false, flushT: null };
@@ -2033,23 +2037,53 @@ function screenSketchRoom(r) {
   else {
     const half = r.status === "draw" && phaseEnd(r) != null && phaseEnd(r) - Date.now() < SDUR.draw * 500;
     const info = r.status === "reveal"
-      ? h("div", { class: "panel turn" }, h("div", { class: "field-label", text: "정답 공개" }), timerEl(r, "다음 그림까지"),
+      ? h("div", { class: "panel turn sk-info" }, timerEl(r, "정답 공개 · 다음 그림까지"),
           h("p", { class: "sk-answer" }, "정답 ", h("b", { text: r.word })),
           h("p", { class: "note", text: guessed.length ? "맞힌 사람: " + guessed.map(nickOf).join(", ") : "아무도 못 맞혔어요." }))
       : iDraw
-        ? h("div", { class: "panel turn mine" }, h("div", { class: "field-label", text: "내가 화가예요" }), timerEl(r, "그리기 남은 시간"),
-            h("p", { class: "sk-answer" }, "그릴 것 ", h("b", { text: r.word })),
-            !r.skipUsed && !guessed.length ? h("button", { type: "button", class: "link-btn", onclick: skSkipWord, text: "다른 단어로 바꾸기 (1번)" }) : null)
-        : h("div", { class: "panel turn" }, h("div", { class: "field-label", text: "화가 " + nickOf(drawer) }), timerEl(r, "남은 시간"),
-            h("p", { class: "sk-answer" }, "정답 힌트 ", h("b", { class: "sk-hint", text: skHint(r.word, half) })),
-            h("p", { class: "note", text: me && guessed.indexOf(me.id) >= 0 ? "정답을 맞혔어요! 다른 사람을 기다려요." : half ? "초성 힌트가 열렸어요." : Array.from(r.word || "").length + "글자예요. 시간이 반쯤 지나면 초성이 보여요." }));
-    body = [info, h("div", { class: "sk-stage" + (iDraw ? " drawing" : "") }, skCanvas(), iDraw ? skTools() : null)];
+        ? h("div", { class: "panel turn mine sk-info" }, timerEl(r, "내가 화가예요 · 남은 시간"),
+            h("p", { class: "sk-answer" }, "그릴 것 ", h("b", { text: r.word }),
+              !r.skipUsed && !guessed.length ? h("button", { type: "button", class: "link-btn", onclick: skSkipWord, text: "단어 바꾸기(1번)" }) : null))
+        : h("div", { class: "panel turn sk-info" }, timerEl(r, "화가 " + nickOf(drawer) + " · 남은 시간"),
+            h("p", { class: "sk-answer" }, "힌트 ", h("b", { class: "sk-hint", text: skHint(r.word, half) }),
+              h("small", { text: me && guessed.indexOf(me.id) >= 0 ? " 정답! 기다리는 중" : half ? " 초성 공개" : " " + Array.from(r.word || "").length + "글자" })));
+    const said = skSaid(r);
+    const left = [], right = [];
+    lineup.forEach(function (p, i) { (i % 2 ? right : left).push(skAvatar(p, i % 2 ? "r" : "l", r, said)); });
+    body = [info,
+      h("div", { class: "sk-arena" },
+        h("div", { class: "sk-side" }, left),
+        h("div", { class: "sk-stage" + (iDraw ? " drawing" : "") }, skCanvas()),
+        h("div", { class: "sk-side" }, right)),
+      iDraw ? skTools() : null];
   }
   const res = h("section", { class: "screen room" }, back, head,
-    h("div", { class: "field" }, h("div", { class: "field-label", text: playing ? "점수" : "모인 사람 " + lineup.length + "명" }), chips),
+    playing && r.status !== "result" ? null : h("div", { class: "field" }, h("div", { class: "field-label", text: playing ? "점수" : "모인 사람 " + lineup.length + "명" }), chips),
     body, skChat(r, me, iDraw));
   requestAnimationFrame(skResize);
   return res;
+}
+/* latest chat line per player, shown as a speech bubble for a few seconds */
+const SAY_MS = 6000;
+function skSaid(r) {
+  const out = {}, now = Date.now(), game = r.game || 0;
+  let next = Infinity;
+  S.msgs.forEach(function (m) {
+    if ((m.game || 0) !== game || m.kind !== "chat" || !m.memberId) return;
+    const t = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : now;
+    if (now - t < SAY_MS) { out[m.memberId] = m.text; next = Math.min(next, t + SAY_MS); }
+  });
+  clearTimeout(SK.sayT);
+  if (next < Infinity) SK.sayT = setTimeout(render, Math.max(200, next - now + 100));
+  return out;
+}
+function skAvatar(p, side, r, said) {
+  const drawer = skDrawer(r), ok = (r.guessed || []).indexOf(p) >= 0, me = meMember();
+  return h("div", { class: "sk-av " + side + (p === drawer ? " drawer" : "") + (ok ? " ok" : "") + (me && p === me.id ? " me" : "") },
+    h("div", { class: "sk-av-ph" }, photoBox(findMember(p) || {}), p === drawer ? h("span", { class: "sk-badge", text: "🖌" }) : ok ? h("span", { class: "sk-badge ok", text: "✓" }) : null),
+    h("span", { class: "sk-av-name", text: nickOf(p) }),
+    h("span", { class: "sk-av-score", text: ((r.scores || {})[p] || 0) + "점" }),
+    said[p] ? h("span", { class: "sk-say", text: said[p] }) : null);
 }
 function skLobbyPanel(r, me, inRoom, players) {
   function seg(field, value, label, def) {
@@ -2108,7 +2142,7 @@ function skChat(r, me, iDraw) {
     S.drafts["chat-text"] = ""; inp.value = "";
     try { await skGuess(t); render(); } catch (e) { toast(e && e.code === "late" ? "아쉽게 시간이 지났어요." : errText(e)); }
   });
-  return h("div", { class: "field" }, h("div", { class: "field-label", text: r.status === "draw" ? "정답 맞히기" : "대화" }), log, f);
+  return h("div", { class: "field dock sk" + (iDraw ? " slim" : "") }, h("div", { class: "field-label", text: r.status === "draw" ? "정답 맞히기" : "대화" }), log, f);
 }
 
 
@@ -2461,7 +2495,7 @@ function smChat(r, me) {
     const t = inp.value.trim(); if (!t || !S.user) return;
     try { await sendMsg("chat", t); S.drafts["chat-text"] = ""; render(); } catch (e) { toast(errText(e)); }
   });
-  return h("div", { class: "field" }, h("div", { class: "field-label", text: "대화" }), log, f);
+  return h("div", { class: "field dock" + (r.status === "play" || r.status === "ready" ? " slim" : "") }, h("div", { class: "field-label", text: "대화" }), log, f);
 }
 
 /* ---------- Liar: custom topics (boss) ---------- */
