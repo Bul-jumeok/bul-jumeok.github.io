@@ -192,8 +192,8 @@ function unlockAudio() {
   document.addEventListener(ev, unlockAudio, { passive: true, capture: true });
 });
 document.addEventListener("visibilitychange", function () {
-  if (document.visibilityState === "visible") { if (SND.ctx && SND.on) { ac(); mediaKeepAlive(true); } }
-  else mediaKeepAlive(false);
+  if (document.visibilityState === "visible") { if (SND.ctx && SND.on) { ac(); mediaKeepAlive(true); } bgmSet(bgmMoodFor()); }
+  else { mediaKeepAlive(false); bgmSet(null); }
 });
 function noiseBuf(c) {
   if (!SND.buf) {
@@ -290,6 +290,83 @@ function sfx(name) {
   if (EMU) (window.__sfxLog = window.__sfxLog || []).push(name);
   if (!SND.on) return;
   try { SFX[name](); } catch (e) {}
+}
+/* ---------- 배경음악: 직접 합성한 잔잔한 루프 (저작권 걱정 없음) ---------- */
+const BGM = { on: true, mood: null, master: null, timer: null, next: 0, bar: 0 };
+try { BGM.on = localStorage.getItem("bf-bgm") !== "off"; } catch (e) {}
+const BGM_VOL = 0.15;
+if (EMU) window.__bgm = BGM;
+/* chords as MIDI notes; bar = seconds per chord; arp = chance of a soft note on each step */
+const MOODS = {
+  lounge: { bar: 3.6, step: 0.45, swing: 0.07, arp: 0.38, vol: 1, cut: 1900, chords: [[50, 53, 57, 60], [43, 53, 55, 59], [48, 52, 55, 59], [45, 52, 55, 60]] },
+  calm:   { bar: 4.4, step: 0.55, swing: 0, arp: 0.32, vol: 0.9, cut: 1500, chords: [[48, 55, 59, 64], [45, 52, 55, 60], [41, 48, 52, 57], [43, 50, 55, 59]] },
+  play:   { bar: 3.0, step: 0.375, swing: 0.05, arp: 0.42, vol: 0.85, cut: 2200, chords: [[41, 53, 57, 60], [48, 52, 55, 60], [50, 53, 57, 62], [46, 53, 58, 62]] },
+  mafia:  { bar: 4.0, step: 0.5, swing: 0, arp: 0.28, vol: 0.9, cut: 1400, chords: [[45, 52, 57, 60], [41, 48, 53, 57], [48, 52, 55, 60], [40, 47, 52, 56]] },
+  night:  { bar: 5.2, step: 0.65, swing: 0, arp: 0.18, vol: 0.85, cut: 900, chords: [[38, 50, 53, 57], [46, 50, 53, 58], [43, 50, 55, 58], [45, 49, 52, 57]] }
+};
+function midiHz(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+function bgmMoodFor() {
+  if (currentRoute().indexOf("room-") !== 0) return null;
+  const R = S.room;
+  if (!R || R.status === "closed") return null;
+  if (R.type === "mafia") return R.status === "night" ? "night" : "mafia";
+  if (R.type === "smoke") return R.status === "play" || R.status === "ready" ? null : "lounge";  /* 숨소리를 들어야 하는 동안은 조용히 */
+  if (R.type === "sketch") return "play";
+  if (R.type === "assoc") return "calm";
+  return "lounge";
+}
+function bgmSet(mood) {
+  if (!BGM.on || !SND.on || document.visibilityState === "hidden") mood = null;
+  if (mood === BGM.mood) return;
+  if (BGM.master && SND.ctx) {
+    const old = BGM.master, t = SND.ctx.currentTime;
+    try { old.gain.cancelScheduledValues(t); old.gain.setValueAtTime(old.gain.value, t); old.gain.linearRampToValueAtTime(0.0001, t + 1.5); } catch (e) {}
+    setTimeout(function () { try { old.disconnect(); } catch (e) {} }, 2500);
+  }
+  BGM.master = null; BGM.mood = mood;
+  clearInterval(BGM.timer); BGM.timer = null;
+  if (mood) { BGM.timer = setInterval(bgmTick, 250); bgmTick(); }
+}
+function bgmTick() {
+  const M = MOODS[BGM.mood]; if (!M) return;
+  const c = ac(); if (!c || c.state !== "running") return;
+  if (!BGM.master) {
+    const g = c.createGain(), f = c.createBiquadFilter();
+    f.type = "lowpass"; f.frequency.value = M.cut; f.Q.value = 0.4;
+    g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.linearRampToValueAtTime(BGM_VOL * M.vol, c.currentTime + 2.5);
+    g.connect(f); f.connect(c.destination);
+    BGM.master = g; BGM.next = c.currentTime + 0.15; BGM.bar = 0;
+  }
+  if (BGM.next < c.currentTime) BGM.next = c.currentTime + 0.05;
+  while (BGM.next < c.currentTime + 1.5) { bgmBar(c, M, BGM.next); BGM.next += M.bar; BGM.bar++; }
+}
+function bgmVoice(c, out, hz, t, dur, o) {
+  const os = c.createOscillator(), g = c.createGain();
+  os.type = o.type || "sine"; os.frequency.setValueAtTime(hz, t);
+  if (o.detune) os.detune.setValueAtTime(o.detune, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(o.gain, t + o.attack);
+  g.gain.setTargetAtTime(0.0001, t + Math.max(o.attack, dur - o.release), o.release / 3);
+  os.connect(g); g.connect(out);
+  os.start(t); os.stop(t + dur + o.release);
+}
+function bgmBar(c, M, t) {
+  const out = BGM.master, chord = M.chords[BGM.bar % M.chords.length];
+  /* soft pad */
+  chord.forEach(function (n, i) {
+    bgmVoice(c, out, midiHz(n + 12), t, M.bar + 0.6, { type: "sine", gain: 0.05, attack: 1.2, release: 1.4 });
+    bgmVoice(c, out, midiHz(n + 12), t, M.bar + 0.6, { type: "triangle", gain: 0.018, attack: 1.4, release: 1.4, detune: i % 2 ? 6 : -6 });
+  });
+  /* bass */
+  bgmVoice(c, out, midiHz(chord[0] - 12), t, M.bar * 0.9, { type: "sine", gain: 0.11, attack: 0.08, release: 1.0 });
+  /* gentle plucks */
+  const steps = Math.floor(M.bar / M.step), tones = chord.map(function (n) { return n + 24; }).concat(chord.map(function (n) { return n + 36; }))
+    .filter(function (n) { return n >= 62 && n <= 86; });
+  for (let i = 1; i < steps; i++) {
+    if (Math.random() > M.arp) continue;
+    const n = tones[Math.floor(Math.random() * tones.length)];
+    bgmVoice(c, out, midiHz(n), t + i * M.step + (i % 2 ? M.swing : 0), 1.1, { type: "sine", gain: 0.045, attack: 0.012, release: 0.9 });
+  }
 }
 function breathStart(L) {
   if (EMU) (window.__sfxLog = window.__sfxLog || []).push("inhale");
@@ -3860,14 +3937,26 @@ const soundBtn = h("button", { type: "button", class: "snd-btn", "aria-label": S
 function setSound(on) {
   SND.on = on;
   try { localStorage.setItem("bf-sound", on ? "on" : "off"); } catch (e) {}
-  if (!on) { breathStop(); mediaKeepAlive(false); } else { mediaKeepAlive(true); ac(); sfx("ding"); }
+  if (!on) { breathStop(); mediaKeepAlive(false); bgmSet(null); } else { mediaKeepAlive(true); ac(); sfx("ding"); bgmSet(bgmMoodFor()); }
   soundBtn.textContent = on ? "🔊" : "🔇";
   soundBtn.setAttribute("aria-label", on ? "소리 끄기" : "소리 켜기");
   toast(on ? "효과음을 켰어요." : "효과음을 껐어요.");
 }
+const bgmBtn = h("button", { type: "button", class: "snd-btn bgm-btn" + (BGM.on ? "" : " off"), "aria-pressed": BGM.on ? "true" : "false",
+  "aria-label": BGM.on ? "배경음악 끄기" : "배경음악 켜기", text: "🎵", onclick: function () { setBgm(!BGM.on); } });
+function setBgm(on) {
+  BGM.on = on;
+  try { localStorage.setItem("bf-bgm", on ? "on" : "off"); } catch (e) {}
+  bgmBtn.classList.toggle("off", !on);
+  bgmBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  bgmBtn.setAttribute("aria-label", on ? "배경음악 끄기" : "배경음악 켜기");
+  if (on) { mediaKeepAlive(true); ac(); }
+  bgmSet(bgmMoodFor());
+  toast(on ? (SND.on ? "배경음악을 켰어요. 게임방에 들어가면 나와요." : "배경음악을 켰어요. 🔇 소리도 켜야 들려요.") : "배경음악을 껐어요.");
+}
 const header = h("div", { class: "filebar wrap" },
   h("span", { class: "brand" }, logo("logo-s"), h("span", null, h("b", { text: "불주먹조직" }), " · 비밀본부")),
-  h("span", { class: "fb-right" }, soundBtn, opChip, h("span", { class: "lvl", text: "기밀 등급 A" })));
+  h("span", { class: "fb-right" }, bgmBtn, soundBtn, opChip, h("span", { class: "lvl", text: "기밀 등급 A" })));
 const TABS = [["hq", "본부"], ["members", "조직원"], ["games", "게임방"], ["guestbook", "방명록"]];
 const tabEls = {};
 const tabbar = h("nav", { class: "tabbar", "aria-label": "주 메뉴" },
@@ -3936,6 +4025,7 @@ function draw() {
   document.body.classList.toggle("wide-room", r.indexOf("room-") === 0);
   main.replaceChildren(view);
   requestAnimationFrame(fitBubbles);
+  bgmSet(bgmMoodFor());
   Object.keys(tabEls).forEach(function (k) { if (k === tab && !gate) tabEls[k].setAttribute("aria-current", "page"); else tabEls[k].removeAttribute("aria-current"); });
   opChip.hidden = !isBoss();
 

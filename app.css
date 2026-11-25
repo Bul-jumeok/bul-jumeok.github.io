@@ -945,3 +945,5 @@ img { max-width: 100%; }
   body.wide-room .sk-canvas { width: min(100%, calc(100vh - 400px)); }
   body.wide-room .vote-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
+.bgm-btn.off { opacity: 0.4; position: relative; }
+.bgm-btn.off::after { content: ""; position: absolute; left: 6px; right: 6px; top: 50%; height: 1.5px; background: var(--red); transform: rotate(-35deg); }
