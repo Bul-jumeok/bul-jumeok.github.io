@@ -1077,3 +1077,4 @@ img { max-width: 100%; }
 .w-emoji { display: grid; place-items: center; font-size: 76px; line-height: 1; border-color: var(--red) !important; }
 @media (max-width: 959px) { .ceremony .w-emoji { font-size: 56px; } }
 .anon-face { display: grid; place-items: center; font-size: 26px; background: var(--raised); border: 1px solid var(--line); }
+.mt-kind-fixed { margin: 0; font-weight: 700; }
