@@ -1971,7 +1971,7 @@ function exitButton(r) {
   }, text: "🚪 나가기" });
 }
 /* a liar game is a set of words (default 5); each word is a full round, points add up */
-function liarSetSize(r) { return [1, 3, 5].indexOf(r.setSize) >= 0 ? r.setSize : 5; }
+function liarSetSize(r) { return [3, 5, 8, 10].indexOf(r.setSize) >= 0 ? r.setSize : 5; }
 function liarPick(r, lineup, custom, used) {
   let topic, seed, d;
   for (let i = 0; i < 25; i++) {
@@ -2265,8 +2265,8 @@ function lobbyPanel(r, me, inRoom, players) {
     h("div", { class: "field-label", text: "게임 설정 · 참가자 누구나 바꿀 수 있어요" }),
     h("div", { class: "seg" }, seg("mode", 0, "일반", "라이어는 자기가 라이어인 걸 알아요"), seg("mode", 1, "바보", "라이어도 비슷한 단어를 받아요")),
     h("div", { class: "seg" }, seg("rounds", 1, "설명 1바퀴"), seg("rounds", 2, "설명 2바퀴")),
-    h("div", { class: "seg" }, [1, 3, 5].map(function (n) {
-      return h("button", { type: "button", "aria-pressed": liarSetSize(r) === n ? "true" : "false", onclick: function () { roomUpdate({ setSize: n }); } }, "단어 " + n + "개", h("small", { text: n === 5 ? "추천 · 점수 합산" : n === 1 ? "한 판만" : "점수 합산" }));
+    h("div", { class: "seg" }, [3, 5, 8, 10].map(function (n) {
+      return h("button", { type: "button", "aria-pressed": liarSetSize(r) === n ? "true" : "false", onclick: function () { roomUpdate({ setSize: n }); } }, "단어 " + n + "개", n === 5 ? h("small", { text: "추천" }) : null);
     })),
     h("label", { class: "sub-label", for: "room-topic", text: "주제" }), topicSel,
     !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요. 손님은 구경과 채팅만 할 수 있어요." })
