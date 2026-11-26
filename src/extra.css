@@ -639,3 +639,15 @@ img { max-width: 100%; }
 @media (max-width: 959px) { .ceremony .w-emoji { font-size: 56px; } }
 .anon-face { display: grid; place-items: center; font-size: 26px; background: var(--raised); border: 1px solid var(--line); }
 .mt-kind-fixed { margin: 0; font-weight: 700; }
+/* liar: pinned descriptions + score between words */
+.hint-board { border: 1px solid var(--line); background: var(--surface); padding: 10px 12px; display: grid; gap: 6px; }
+.hint-board ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.hint-board li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.35; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.hint-board li:last-child { border-bottom: 0; }
+.hint-board li b { overflow-wrap: anywhere; }
+.hint-board li span { color: var(--fg); overflow-wrap: anywhere; }
+.hint-board li span.wait { color: var(--faint); font-size: 12px; }
+.hint-board li.now b { color: var(--red); }
+.hint-board li.me b::after { content: " (나)"; font-weight: 400; color: var(--faint); font-size: 11px; }
+.liar-next, .liar-final { display: grid; gap: 12px; margin-top: 8px; }
+@media (min-width: 960px) { .hint-board li { font-size: 16px; grid-template-columns: 80px minmax(0, 1fr); } }

@@ -490,13 +490,14 @@ function sfxRoom(a, b) {
       later(b.winner ? "fanfare" : "ominous", t + 400); later("laugh", t + 1700); later("cry", t + 2700);
     }
   } else {
-    if (st && b.status === "hint" && a.status === "lobby") sfx("flip");
+    if (b.status === "hint" && (a.status === "lobby" || a.status === "result")) sfx("flip");
     if (b.status === "hint" && (st || a.turn !== b.turn) && b.order && b.order[b.turn % b.order.length] === my) later("ding", st ? 350 : 0);
     else if (st && (b.status === "discuss" || b.status === "vote")) sfx("ding");
     else if (st && b.status === "guess") sfx("dun");
     else if (st && b.status === "result") {
       if (a.status === "vote") { sfx("sad"); later("sly", 1500); }
       else sfx(b.winner === "team" ? "fanfare" : "sly");
+      if ((b.setTotal || 1) > 1 && (b.setNo || 1) >= b.setTotal) { later("laugh", 2600); later("cry", 3600); }
     }
   }
 }
@@ -1969,6 +1970,40 @@ function exitButton(r) {
     leaveRoom();
   }, text: "🚪 나가기" });
 }
+/* a liar game is a set of words (default 5); each word is a full round, points add up */
+function liarSetSize(r) { return [1, 3, 5].indexOf(r.setSize) >= 0 ? r.setSize : 5; }
+function liarPick(r, lineup, custom, used) {
+  let topic, seed, d;
+  for (let i = 0; i < 25; i++) {
+    topic = r.topicChoice >= 0 && LIAR_DEFAULT_TOPICS[r.topicChoice] ? LIAR_DEFAULT_TOPICS[r.topicChoice] : custom[Math.floor(Math.random() * custom.length)];
+    seed = Math.floor(Math.random() * 2147483647);
+    d = dealFull(lineup, seed, topic.words);
+    if ((used || []).indexOf(d.word) < 0) break;
+  }
+  return { topic: topic, seed: seed, d: d };
+}
+/* points for one word: catching the liar gives every other player 2, a liar who escapes or guesses the word gets 3 */
+function liarScore(r, winner) {
+  const d = dealFull(r.lineup, r.seed, r.topic.words), sc = Object.assign({}, r.setScores || {});
+  if (winner === "team") r.lineup.forEach(function (p) { if (p !== d.liar) sc[p] = (sc[p] || 0) + 2; });
+  else sc[d.liar] = (sc[d.liar] || 0) + 3;
+  return { setScores: sc, setLog: (r.setLog || []).concat([{ n: r.setNo || 1, liar: d.liar, word: d.word, winner: winner }]) };
+}
+async function liarNextRound(expectPhase) {
+  const custom = allTopics();
+  await runTransaction(db, async function (tx) {
+    const snap = await tx.get(roomRef()); const r = snap.data();
+    if (!r || r.status !== "result" || (r.setNo || 1) >= (r.setTotal || 1)) return;
+    if (expectPhase != null && r.phase !== expectPhase) return;
+    const pk = liarPick(r, r.lineup, custom, r.usedWords || []);
+    const n = (r.setNo || 1) + 1;
+    sysMsg(tx, r, "🃏 " + n + "번째 단어 시작! (" + n + " / " + r.setTotal + ")");
+    tx.update(roomRef(), nextPhase(r, {
+      status: "hint", seed: pk.seed, topic: { name: pk.topic.name, words: pk.topic.words }, order: pk.d.order, turn: 0,
+      votes: {}, accused: null, guess: null, winner: null, reason: null, readyVote: [], setNo: n, usedWords: (r.usedWords || []).concat([pk.d.word])
+    }));
+  });
+}
 async function startGame() {
   const custom = allTopics();
   try {
@@ -1977,14 +2012,15 @@ async function startGame() {
       if (!r || r.status !== "lobby") throw { code: "phase" };
       const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 3) throw { code: "few" };
-      const topic = r.topicChoice >= 0 && LIAR_DEFAULT_TOPICS[r.topicChoice] ? LIAR_DEFAULT_TOPICS[r.topicChoice] : custom[Math.floor(Math.random() * custom.length)];
-      const seed = Math.floor(Math.random() * 2147483647);
-      const d = dealFull(lineup, seed, topic.words);
+      const pk = liarPick(r, lineup, custom, []);
+      const topic = pk.topic, seed = pk.seed, d = pk.d, total = liarSetSize(r);
+      if (total > 1) sysMsg(tx, { game: (r.game || 0) + 1 }, "🃏 라이어 게임 시작! 단어 " + total + "개를 차례로 해요. 1번째 단어!");
       tx.update(roomRef(), {
         status: "hint", lineup: lineup, seed: seed, topic: { name: topic.name, words: topic.words },
         order: d.order, turn: 0, votes: {}, accused: null, guess: null, winner: null, reason: null,
         game: (r.game || 0) + 1, startedAt: serverTimestamp(),
-        phase: (r.phase || 0) + 1, phaseAt: serverTimestamp(), readyVote: []
+        phase: (r.phase || 0) + 1, phaseAt: serverTimestamp(), readyVote: [],
+        setNo: 1, setTotal: total, setScores: {}, setLog: [], usedWords: [d.word]
       });
     });
     S.flipped = {};
@@ -2017,7 +2053,7 @@ async function advanceTurn(kind, text, expectPhase) {
     tx.set(mref, {
       uid: myUid(), memberId: me ? me.id : null, nick: me ? me.nick : "손님",
       text: kind === "hint" ? text : kind === "timeout" ? nickOf(speaker) + " 시간 초과! 다음 사람 차례예요." : nickOf(speaker) + " 차례를 넘겼어요.",
-      kind: kind === "hint" ? "hint" : "skip", game: r.game || 0, round: Math.floor(r.turn / n) + 1, speaker: speaker, createdAt: serverTimestamp()
+      kind: kind === "hint" ? "hint" : "skip", game: r.game || 0, round: Math.floor(r.turn / n) + 1, sn: r.setNo || 1, speaker: speaker, createdAt: serverTimestamp()
     });
     const next = r.turn + 1;
     tx.update(roomRef(), nextPhase(r, next >= n * (r.rounds || 1) ? { turn: next, status: "discuss", readyVote: [] } : { turn: next }));
@@ -2065,9 +2101,9 @@ async function finalizeVotes(force, expectPhase) {
       voted.forEach(function (p) { tally[votes[p]] = (tally[votes[p]] || 0) + 1; });
       let max = 0; Object.keys(tally).forEach(function (k) { if (tally[k] > max) max = tally[k]; });
       const top = Object.keys(tally).filter(function (k) { return tally[k] === max; });
-      if (!voted.length) tx.update(roomRef(), nextPhase(r, { status: "result", winner: "liar", accused: null, reason: "아무도 투표하지 않았어요." }));
-      else if (top.length > 1) tx.update(roomRef(), nextPhase(r, { status: "result", winner: "liar", accused: null, reason: "표가 똑같이 갈려서 라이어를 잡지 못했어요." }));
-      else if (top[0] !== d.liar) tx.update(roomRef(), nextPhase(r, { status: "result", winner: "liar", accused: top[0], reason: "엉뚱한 사람을 지목했어요." }));
+      if (!voted.length) tx.update(roomRef(), nextPhase(r, Object.assign({ status: "result", winner: "liar", accused: null, reason: "아무도 투표하지 않았어요." }, liarScore(r, "liar"))));
+      else if (top.length > 1) tx.update(roomRef(), nextPhase(r, Object.assign({ status: "result", winner: "liar", accused: null, reason: "표가 똑같이 갈려서 라이어를 잡지 못했어요." }, liarScore(r, "liar"))));
+      else if (top[0] !== d.liar) tx.update(roomRef(), nextPhase(r, Object.assign({ status: "result", winner: "liar", accused: top[0], reason: "엉뚱한 사람을 지목했어요." }, liarScore(r, "liar"))));
       else tx.update(roomRef(), nextPhase(r, { status: "guess", accused: top[0] }));
     });
   } catch (e) { toast(errText(e)); }
@@ -2079,17 +2115,19 @@ async function submitGuess(text, timedOut, expectPhase) {
     if (expectPhase != null && r.phase !== expectPhase) return;
     const d = dealFull(r.lineup, r.seed, r.topic.words);
     const ok = text && normWord(text) === normWord(d.word);
-    tx.update(roomRef(), nextPhase(r, {
+    tx.update(roomRef(), nextPhase(r, Object.assign({
       status: "result", guess: text || "", winner: ok ? "liar" : "team",
       reason: ok ? "라이어가 제시어를 맞혔어요." : timedOut ? "라이어가 20초 안에 제시어를 맞히지 못했어요." : (text ? "라이어가 제시어를 맞히지 못했어요." : "라이어가 맞히기를 포기했어요.")
-    }));
+    }, liarScore(r, ok ? "liar" : "team"))));
   });
 }
 
 /* ---------- Liar: phase timers ---------- */
 const GRACE_MS = 1500;
 let lastTimeoutKey = "";
-function durOf(r) { return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : r && r.type === "smoke" ? SMDUR : r && r.type === "assoc" ? AQDUR : DUR)[r && r.status]; }
+function durOf(r) {
+  if (r && (r.type || "liar") === "liar" && r.status === "result") return (r.setNo || 1) < (r.setTotal || 1) ? (FAST ? Math.max(2, Math.round(12 / FAST)) : 12) : undefined;
+  return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : r && r.type === "smoke" ? SMDUR : r && r.type === "assoc" ? AQDUR : DUR)[r && r.status]; }
 function phaseEnd(r) {
   if (!r || !durOf(r) || !r.phaseAt || !r.phaseAt.toMillis) return null;
   return r.phaseAt.toMillis() + durOf(r) * 1000;
@@ -2112,6 +2150,7 @@ async function onTimeout(r) {
   if (r.status === "discuss") return toVote(r.phase);
   if (r.status === "vote") return finalizeVotes(true, r.phase);
   if (r.status === "guess") return submitGuess("", true, r.phase);
+  if (r.status === "result") return liarNextRound(r.phase);
 }
 setInterval(function () {
   const r = S.room;
@@ -2134,7 +2173,7 @@ setInterval(function () {
   }
 }, 500);
 async function backToLobby() {
-  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false, board: [], shot: null, shots: [], round: 0, rk: 0, out: [], cur: null, qn: 0, solved: [], tries: {}, pts: {} });
+  await roomUpdate({ status: "lobby", votes: {}, accused: null, guess: null, winner: null, reason: null, turn: 0, order: [], lineup: [], topic: null, readyVote: [], phaseAt: null, alive: [], night: {}, checks: [], verdict: {}, day: 0, word: null, guessed: [], used: [], scores: {}, skipUsed: false, board: [], shot: null, shots: [], setNo: 0, setTotal: 0, setScores: {}, setLog: [], usedWords: [], round: 0, rk: 0, out: [], cur: null, qn: 0, solved: [], tries: {}, pts: {} });
 }
 
 function screenRoom(id) {
@@ -2161,8 +2200,8 @@ function screenRoom(id) {
 
   const head = h("div", { class: "room-head" },
     h("div", null, h("span", { class: "eyebrow", text: "라이어 · " + nickOf(r.createdBy) + "의 방" }),
-      h("h2", { text: STATUS_LABEL[r.status] || "" })),
-    h("span", { class: "mode-chip", text: (r.mode === 1 ? "바보 모드" : "일반 모드") + " · " + (r.rounds || 1) + "바퀴" }));
+      h("h2", { text: (playing && (r.setTotal || 1) > 1 ? (r.setNo || 1) + "/" + r.setTotal + " 단어 · " : "") + (STATUS_LABEL[r.status] || "") })),
+    h("span", { class: "mode-chip", text: (r.mode === 1 ? "바보 모드" : "일반 모드") + " · " + (r.rounds || 1) + "바퀴" + (playing ? "" : " · 단어 " + liarSetSize(r) + "개") }));
 
   const chips = h("div", { class: "chips" }, lineup.map(function (p) {
     const voted = r.status === "vote" && r.votes && r.votes[p];
@@ -2190,8 +2229,26 @@ function screenRoom(id) {
   }) : null;
   return h("section", { class: "screen room" }, back, head,
     playing ? stage : h("div", { class: "field" }, h("div", { class: "field-label", text: "모인 사람 " + lineup.length + "명" }), chips),
-    card, phase,
+    card, playing ? hintBoard(r, me) : null, phase,
     showLog ? chatBox(r, me) : null);
+}
+/* every description for the current word stays pinned here, so nobody has to scroll the chat */
+function hintBoard(r, me) {
+  const sn = r.setNo || 1, game = r.game || 0;
+  const said = {};
+  S.msgs.forEach(function (m) {
+    if (m.kind !== "hint" || (m.game || 0) !== game || (m.sn || 1) !== sn || !m.memberId) return;
+    (said[m.memberId] = said[m.memberId] || []).push(m.text);
+  });
+  const n = (r.order || []).length, speaker = r.status === "hint" && n ? r.order[r.turn % n] : null;
+  return h("div", { class: "hint-board" },
+    h("div", { class: "field-label", text: "📌 설명 모음" + ((r.setTotal || 1) > 1 ? " · " + sn + "번째 단어" : "") }),
+    h("ul", null, (r.order || []).map(function (p) {
+      const list = said[p] || [];
+      return h("li", { class: (p === speaker ? "now" : "") + (me && p === me.id ? " me" : "") },
+        h("b", { text: nickOf(p) }),
+        h("span", { class: list.length ? "" : "wait", text: list.length ? list.join(" · ") : p === speaker ? "설명하는 중…" : "아직" }));
+    })));
 }
 function lobbyPanel(r, me, inRoom, players) {
   function seg(field, value, label, sub) {
@@ -2208,6 +2265,9 @@ function lobbyPanel(r, me, inRoom, players) {
     h("div", { class: "field-label", text: "게임 설정 · 참가자 누구나 바꿀 수 있어요" }),
     h("div", { class: "seg" }, seg("mode", 0, "일반", "라이어는 자기가 라이어인 걸 알아요"), seg("mode", 1, "바보", "라이어도 비슷한 단어를 받아요")),
     h("div", { class: "seg" }, seg("rounds", 1, "설명 1바퀴"), seg("rounds", 2, "설명 2바퀴")),
+    h("div", { class: "seg" }, [1, 3, 5].map(function (n) {
+      return h("button", { type: "button", "aria-pressed": liarSetSize(r) === n ? "true" : "false", onclick: function () { roomUpdate({ setSize: n }); } }, "단어 " + n + "개", h("small", { text: n === 5 ? "추천 · 점수 합산" : n === 1 ? "한 판만" : "점수 합산" }));
+    })),
     h("label", { class: "sub-label", for: "room-topic", text: "주제" }), topicSel,
     !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요. 손님은 구경과 채팅만 할 수 있어요." })
       : inRoom
@@ -2319,6 +2379,21 @@ function resultPanel(r, d, me, isPlayer) {
     Object.keys(votes).length ? h("ul", { class: "vote-list" }, (r.lineup || []).filter(function (p) { return votes[p]; }).map(function (p) {
       return h("li", { text: nickOf(p) + " → " + nickOf(votes[p]) });
     })) : null,
+    liarSetTail(r));
+}
+function liarSetTail(r) {
+  const total = r.setTotal || 1, n = r.setNo || 1, sc = r.setScores || {};
+  const rank = (r.lineup || []).slice().sort(function (a, b) { return (sc[b] || 0) - (sc[a] || 0); });
+  const table = total > 1 ? h("div", { class: "field" }, h("div", { class: "field-label", text: "점수 · " + n + " / " + total + " 단어" }),
+    h("ul", { class: "role-list" }, rank.map(function (p, i) {
+      return h("li", null, h("span", { text: (["🥇", "🥈", "🥉"][i] || (i + 1) + "등") + " " + nickOf(p) }), h("b", { text: (sc[p] || 0) + "점" }));
+    })),
+    h("p", { class: "hint", text: "라이어를 잡으면 나머지 모두 +2점, 라이어가 살아남거나 제시어를 맞히면 라이어 +3점" })) : null;
+  if (n < total) return h("div", { class: "liar-next" }, table, timerEl(r, "다음 단어까지"),
+    h("button", { type: "button", class: "save", onclick: function () { liarNextRound(r.phase); }, text: "바로 다음 단어 ▶" }));
+  return h("div", { class: "liar-final" },
+    total > 1 ? ceremony(rank[0], rank.slice(1), "라이어 게임 " + total + "단어 우승 · " + (sc[rank[0]] || 0) + "점") : null,
+    table,
     h("div", { class: "op-row" },
       h("button", { type: "button", onclick: function () { go("game-liar"); }, text: "방 목록" }),
       h("button", { type: "button", class: "go", onclick: backToLobby, text: "같은 방에서 한 판 더" })));
@@ -4387,8 +4462,42 @@ function render() {
   queued = true;
   requestAnimationFrame(function () { queued = false; draw(); });
 }
+/* Korean typing on Windows: the IME is still building the current syllable (조합 중) while you type.
+   Rebuilding the screen in that moment replaces the input box and breaks the syllable (오타).
+   So: never redraw while composing, and send with Enter only after the last syllable is finished. */
+const IME = { on: false, pending: false, submitFor: null, sentForm: null, sentAt: 0, fallback: 0 };
+function imeSubmit(t) {
+  clearTimeout(IME.fallback);
+  const f = t && t.form; if (!f) return;
+  if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event("submit", { cancelable: true }));
+  IME.sentForm = f; IME.sentAt = Date.now();
+}
+/* Windows Chrome can fire a second Enter right after the IME one: don't send the same message twice */
+document.addEventListener("submit", function (e) {
+  if (IME.sentForm === e.target && Date.now() - IME.sentAt < 500) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
+document.addEventListener("compositionstart", function () { IME.on = true; }, true);
+document.addEventListener("compositionend", function (e) {
+  IME.on = false;
+  const t = e.target;
+  if (IME.submitFor && IME.submitFor === t) {
+    IME.submitFor = null;
+    setTimeout(function () { imeSubmit(t); }, 0);
+  }
+  if (IME.pending) { IME.pending = false; setTimeout(render, 30); }
+}, true);
+document.addEventListener("keydown", function (e) {
+  const t = e.target;
+  if (e.key !== "Enter" || !(e.isComposing || e.keyCode === 229) || !t || t.tagName !== "INPUT" || !t.form) return;
+  e.preventDefault();          /* wait for compositionend, then submit once with the whole word */
+  IME.submitFor = t;
+  clearTimeout(IME.fallback);
+  IME.fallback = setTimeout(function () { if (IME.submitFor === t) { IME.submitFor = null; IME.on = false; imeSubmit(t); } }, 400);
+}, true);
+document.addEventListener("focusout", function () { if (IME.pending && !IME.on) { IME.pending = false; render(); } }, true);
 function draw() {
   if (SK.drawing || SK.sliding || SMK.holding) { SK.pendingRender = true; return; }
+  if (IME.on && document.activeElement && main.contains(document.activeElement)) { IME.pending = true; return; }
   migrateCrewTopic();
   const active = document.activeElement;
   const aid = active && active.id && main.contains(active) ? active.id : null;
