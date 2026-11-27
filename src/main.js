@@ -13,6 +13,7 @@ import LOGO from "./logo.txt";
 import { AQ_BANK } from "./assoc_bank.js";
 import { SK_MORE, SK_HARD } from "./sketch_words.js";
 import { CAROLS, songBars, chordNotes } from "./carols.js";
+import { OX_Q, CHOSUNG_Q, TRIVIA_Q, PROVERB_Q, MOVIE_Q, MELODY_Q } from "./quiz_bank.js";
 
 /* ---------- Firebase ---------- */
 const firebaseConfig = {
@@ -50,6 +51,7 @@ const MOTTO = "불은 물로 끄면 되지만, 우린 못 꺼.";
 
 /* ---------- state ---------- */
 const S = {
+  cfg: {},
   user: null,
   bossUid: null, bossKnown: false,
   members: [], membersReady: false,
@@ -342,7 +344,7 @@ function bgmRoomMood() {
   if (R.type === "smoke") return R.status === "play" || R.status === "ready" ? null : "lounge";  /* 숨소리를 들어야 하는 동안은 조용히 */
   if (R.type === "sketch") return "play";
   if (R.type === "assoc") return "calm";
-  if (R.type === "tensec" && R.status === "q") return null;   /* 박자로 세면 반칙이니까 조용히 */
+  if ((R.type === "tensec" || R.type === "music") && R.status === "q") return null;   /* 박자로 세면 반칙이니까 조용히 */
   if (PARTY[R.type]) return ["hearing", "balance", "sync"].indexOf(R.type) >= 0 ? "lounge" : "play";
   return "lounge";
 }
@@ -694,6 +696,8 @@ function subscribeBase() {
     S.members = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }).sort(byNo);
     S.membersReady = true; render();
   }, function () { S.membersReady = true; render(); });
+  onSnapshot(doc(db, "config", "prices"), function (snap) { S.cfg.prices = snap.exists() ? snap.data() : null; render(); }, function () {});
+  onSnapshot(doc(db, "config", "quotes"), function (snap) { S.cfg.quotes = snap.exists() ? snap.data() : null; render(); }, function () {});
   onSnapshot(doc(db, "config", "sketch"), function (snap) {
     S.sketchNames = snap.exists() && Array.isArray(snap.data().names) ? snap.data().names : null;
     S.sketchKnown = true; render();
@@ -1925,15 +1929,15 @@ const GAME_ROWS = [
   ["tiles", "색깔 발판", "arcade", "지정된 색 발판으로 재빨리 이동.", 2, 7, 5, "soon", "🟪"],
   ["worm", "지렁이 대전", "arcade", "먹고 자라고 부딪히지 마라.", 2, 7, 5, "soon", "🪱"],
   ["assoc", "연상퀴즈", "quiz", "힌트 다섯 개, 먼저 맞힐수록 고득점.", 1, 7, 10, "play", "🧩", 1],
-  ["chosung", "초성퀴즈", "quiz", "ㅂㅈㅁ → 불주먹. 초성만 보고 맞혀라.", 1, 7, 8, "soon", "ㄱ"],
-  ["ox", "OX 퀴즈", "quiz", "맞으면 O, 틀리면 X. 해설까지.", 1, 7, 8, "soon", "⭕"],
-  ["memory", "기억력 퀴즈", "quiz", "잠깐 보여준 배열을 순서대로.", 1, 7, 6, "soon", "🧠"],
-  ["proverb", "이어말하기", "quiz", "속담과 관용구의 뒷부분을 맞혀라.", 1, 7, 8, "soon", "🗣️"],
-  ["trivia", "상식퀴즈", "quiz", "역사·과학·문화·스포츠 상식.", 1, 7, 10, "soon", "📚"],
-  ["price", "가격 맞히기", "quiz", "실제 가격에 가장 가깝게.", 2, 7, 8, "soon", "🏷️"],
-  ["zoom", "확대사진 퀴즈", "quiz", "확대된 사진 조각으로 정체를 맞혀라.", 1, 7, 8, "soon", "🔍"],
-  ["music", "음악퀴즈", "quiz", "사용 허가된 음원이 준비되면 열려요.", 1, 7, 8, "soon", "🎵"],
-  ["movie", "영화퀴즈", "quiz", "줄거리와 등장인물로 영화 맞히기.", 1, 7, 8, "soon", "🎬"],
+  ["chosung", "초성퀴즈", "quiz", "ㅂㅈㅁ → 불주먹. 초성만 보고 맞혀라.", 1, 7, 8, "new", "ㄱ"],
+  ["ox", "OX 퀴즈", "quiz", "맞으면 O, 틀리면 X. 해설까지.", 1, 7, 8, "new", "⭕"],
+  ["memory", "기억력 퀴즈", "quiz", "잠깐 보여준 배열을 순서대로.", 1, 7, 6, "new", "🧠"],
+  ["proverb", "이어말하기", "quiz", "속담과 관용구의 뒷부분을 맞혀라.", 1, 7, 8, "new", "🗣️"],
+  ["trivia", "상식퀴즈", "quiz", "역사·과학·문화·스포츠 상식.", 1, 7, 10, "new", "📚"],
+  ["price", "가격 맞히기", "quiz", "두목이 등록한 상품 가격에 가장 가깝게.", 2, 7, 8, "beta", "🏷️"],
+  ["zoom", "확대사진 퀴즈", "quiz", "확대된 조직원 사진 조각으로 주인을 맞혀라.", 1, 7, 8, "new", "🔍"],
+  ["music", "음악퀴즈", "quiz", "저작권 끝난 동요·민요·클래식 멜로디를 듣고 제목 맞히기.", 1, 7, 8, "new", "🎵"],
+  ["movie", "영화퀴즈", "quiz", "줄거리와 등장인물로 영화 맞히기.", 1, 7, 8, "new", "🎬"],
   ["sketch", "드로잉퀴즈", "art", "한 명은 그리고, 나머지는 맞혀라.", 2, 7, 15, "play", "🖌️", 1],
   ["telephone", "그림 전달 게임", "art", "문장 → 그림 → 문장… 전달될수록 엉망진창.", 3, 7, 12, "soon", "📨"],
   ["meme", "짤 만들기", "art", "조직원 사진에 제일 웃긴 자막 달기.", 3, 7, 8, "soon", "🖼️"],
@@ -3711,6 +3715,184 @@ const PARTY = {
     }
   }
 };
+
+/* ================= 퀴즈방 ================= */
+const CHO_LIST = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+function chosungOf(w) { return Array.from(w).map(function (ch) { const c = ch.charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 ? CHO_LIST.charAt(Math.floor((c - 0xAC00) / 588)) : ch; }).join(""); }
+function ansOk(v, a, alt) { const t = normWord(v); return !!t && [a].concat(alt || []).some(function (x) { return normWord(x) === t; }); }
+/* correct answers: 50 + up to 50 for speed, +20 for the first correct one */
+function quizPts(r, ok) {
+  const subs = r.subs || {}, subT = r.subT || {}, lim = (PARTY[r.type].qSec || 20) * 1000, pts = {};
+  const good = r.lineup.filter(function (m) { return subs[m] != null && ok(subs[m]); });
+  good.sort(function (a, b) { return (subT[a] || 1e9) - (subT[b] || 1e9); });
+  good.forEach(function (m, i) { pts[m] = 50 + Math.round(50 * Math.max(0, 1 - (subT[m] || lim) / lim)) + (i === 0 ? 20 : 0); });
+  return { pts: pts, good: good };
+}
+function quizRound(x, r, answerText, extra) {
+  const subs = x.subs || {};
+  return [h("p", { class: "pr-big ok", text: "정답: " + answerText }), extra || null,
+    h("ul", { class: "pr-list" }, (r.lineup || []).slice().sort(function (a, b) { return (x.pts[b] || 0) - (x.pts[a] || 0); }).map(function (m) {
+      const v = subs[m], shown = v == null ? "미응답" : typeof v === "number" && x.q.opts ? x.q.opts[v] : String(v);
+      return h("li", { class: x.pts[m] ? "win" : "" }, h("span", { text: nickOf(m) + " · " + shown }), h("b", { text: x.pts[m] ? "+" + x.pts[m] : "✗" }));
+    }))];
+}
+/* schedule a redraw when the next timed hint should appear */
+function hintStep(r, every, max) {
+  if (!r.phaseAt || !r.phaseAt.toMillis) return 0;
+  const el = Date.now() - r.phaseAt.toMillis(), k = Math.min(max, Math.floor(el / every));
+  clearTimeout(S.hintT);
+  if (k < max) S.hintT = setTimeout(render, every - (el % every) + 60);
+  return k;
+}
+Object.assign(PARTY, {
+  ox: {
+    rounds: 7, qSec: 12, input: "choice", rules: ["문장이 맞으면 O, 틀리면 X. 12초 안에 골라요.", "맞히면 50점 + 빠를수록 최대 50점, 가장 먼저 맞히면 +20점.", "정답과 함께 해설이 나와요."],
+    makeQ: function (r) { const x = freshFrom(OX_Q, r, function (q) { return q.q; }); return { key: x.q, text: x.q, opts: ["⭕  O", "❌  X"], ans: x.a ? 0 : 1, why: x.x }; },
+    resolve: function (r) { const q = quizPts(r, function (v) { return v === r.q.ans; }); return { pts: q.pts, info: {} }; },
+    round: function (x, r) { return quizRound(x, r, x.q.ans === 0 ? "O" : "X", h("p", { class: "note", text: "💡 " + x.q.why })); }
+  },
+  chosung: {
+    rounds: 7, qSec: 25, input: "text", rules: ["초성과 주제를 보고 단어를 맞혀요. 25초.", "맞히면 50점 + 빠를수록 최대 50점, 1등은 +20점.", "10초가 지나면 첫 글자가 공개돼요. 답은 마감 전까지 고칠 수 있어요."],
+    makeQ: function (r) { const x = freshFrom(CHOSUNG_Q, r, function (q) { return q.a; }); return { key: x.a, text: chosungOf(x.a), cat: x.c, ans: x.a }; },
+    resolve: function (r) { const q = quizPts(r, function (v) { return ansOk(v, r.q.ans); }); return { pts: q.pts, info: {} }; },
+    round: function (x, r) { return quizRound(x, r, x.q.ans); },
+    extra: function (r) { const k = hintStep(r, 10000, 1); return h("p", { class: "pq-hint", text: "주제: " + r.q.cat + (k ? " · 첫 글자 ‘" + Array.from(r.q.ans)[0] + "’" : "") + " · " + Array.from(r.q.ans).length + "글자" }); }
+  },
+  trivia: {
+    rounds: 7, qSec: 15, input: "choice", rules: ["보기 4개 중 정답을 골라요. 15초.", "맞히면 50점 + 빠를수록 최대 50점, 1등은 +20점."],
+    makeQ: function (r) { const x = freshFrom(TRIVIA_Q, r, function (q) { return q.q; }); return { key: x.q, text: "[" + x.c + "] " + x.q, opts: x.o, ans: x.a }; },
+    resolve: function (r) { const q = quizPts(r, function (v) { return v === r.q.ans; }); return { pts: q.pts, info: {} }; },
+    round: function (x, r) { return quizRound(x, r, x.q.opts[x.q.ans]); }
+  },
+  proverb: {
+    rounds: 7, qSec: 20, input: "text", rules: ["속담·관용구의 앞부분을 보고 뒷부분을 입력해요. 20초.", "띄어쓰기는 무시해요. 맞히면 50점 + 속도 보너스."],
+    makeQ: function (r) { const x = freshFrom(PROVERB_Q, r, function (q) { return q.q; }); return { key: x.q, text: "“" + x.q + " ______”", ans: x.a, alt: x.alt || [] }; },
+    resolve: function (r) { const q = quizPts(r, function (v) { return ansOk(v, r.q.ans, r.q.alt); }); return { pts: q.pts, info: {} }; },
+    round: function (x, r) { return quizRound(x, r, x.q.ans); }
+  },
+  movie: {
+    rounds: 5, qSec: 30, input: "text", rules: ["힌트가 10초마다 하나씩, 3개까지 열려요.", "영화 제목을 맞혀요(띄어쓰기 무시). 빨리 맞힐수록 고득점."],
+    makeQ: function (r) { const x = freshFrom(MOVIE_Q, r, function (q) { return q.a; }); return { key: x.a, text: "이 영화는?", hints: x.h, ans: x.a, alt: x.alt || [] }; },
+    resolve: function (r) { const q = quizPts(r, function (v) { return ansOk(v, r.q.ans, r.q.alt); }); return { pts: q.pts, info: {} }; },
+    round: function (x, r) { return quizRound(x, r, x.q.ans); },
+    extra: function (r) { const k = hintStep(r, 10000, 2); return h("ol", { class: "aq-hints" }, r.q.hints.map(function (t, i) { return h("li", { class: i <= k ? "open" : "locked" }, h("span", { class: "aq-no", text: "힌트 " + (i + 1) }), h("span", { class: "aq-txt", text: i <= k ? t : "잠김" }), h("span")); })); }
+  },
+  music: {
+    rounds: 5, qSec: 30, input: "text", rules: ["멜로디를 듣고 곡 제목을 맞혀요. 🔊 소리를 켜 주세요.", "저작권이 끝난 동요·민요·클래식·캐롤을 직접 연주해요. 다시 듣기는 언제든.", "빨리 맞힐수록 고득점."],
+    makeQ: function (r) { const x = freshFrom(MELODY_Q, r, function (q) { return q.a; }); return { key: x.a, text: "이 노래 제목은?", n: x.n, bpm: x.bpm, ans: x.a, alt: x.alt || [] }; },
+    resolve: function (r) { const q = quizPts(r, function (v) { return ansOk(v, r.q.ans, r.q.alt); }); return { pts: q.pts, info: {} }; },
+    round: function (x, r) { return quizRound(x, r, x.q.ans); },
+    extra: function (r) {
+      const key = r.id + ":" + r.phase;
+      if (S.melKey !== key) { S.melKey = key; setTimeout(function () { playMelody(r.q); }, 400); }
+      return h("button", { type: "button", class: "px-btn", onclick: function () { playMelody(r.q); }, text: "🔁 다시 듣기" });
+    }
+  },
+  zoom: {
+    rounds: 5, qSec: 20, input: "name", rules: ["조직원 사진을 크게 확대한 조각이 나와요. 시간이 갈수록 점점 멀어져요.", "누구인지 이름을 골라요. 빨리 맞힐수록 고득점."],
+    makeQ: function (r) {
+      const pool = S.members.filter(function (m) { return safePhoto(m.photo); });
+      const m = freshFrom(pool.length ? pool : S.members, r, function (x) { return x.id; });
+      return { key: m.id, text: "이 사진의 주인은?", who: m.id, fx: 20 + Math.floor(Math.random() * 60), fy: 15 + Math.floor(Math.random() * 55) };
+    },
+    resolve: function (r) { const q = quizPts(r, function (v) { return v === r.q.who; }); return { pts: q.pts, info: {} }; },
+    round: function (x, r) { return quizRound(x, r, nickOf(x.q.who)); },
+    extra: function (r) {
+      const m = findMember(r.q.who) || {}, box = h("div", { class: "zoom-box" }, photoBox(m));
+      const left = phaseEnd(r) != null ? Math.max(0, phaseEnd(r) - Date.now()) : 0, total = (PARTY.zoom.qSec) * 1000;
+      const scale = 1 + 7 * (left / total);
+      box.style.setProperty("--fx", r.q.fx + "%"); box.style.setProperty("--fy", r.q.fy + "%");
+      const inner = box.firstChild; inner.style.transformOrigin = r.q.fx + "% " + r.q.fy + "%"; inner.style.transform = "scale(" + scale.toFixed(2) + ")";
+      requestAnimationFrame(function () { inner.style.transition = "transform " + Math.max(0, left / 1000).toFixed(1) + "s linear"; inner.style.transform = "scale(1)"; });
+      return box;
+    }
+  },
+  price: {
+    rounds: 5, qSec: 25, input: "number", rules: ["두목이 등록한 상품의 가격을 맞혀요.", "실제 가격에 가까운 순서대로 100·70·50… 점. 딱 맞히면 +50점 보너스!", "가격은 두목이 적은 기준(날짜·장소)으로 판정해요."],
+    canStart: function () { return priceList().length >= 3 ? null : "두목이 상품을 3개 이상 등록해야 시작할 수 있어요."; },
+    makeQ: function (r) { const x = freshFrom(priceList(), r, function (q) { return q.name; }); return { key: x.name, text: x.name + " 의 가격은?", ans: x.price, basis: x.basis, max: 100000000, unit: "원" }; },
+    resolve: function (r) {
+      const subs = r.subs || {}, ok = r.lineup.filter(function (m) { return typeof subs[m] === "number"; }).map(function (m) { return { m: m, v: Math.abs(subs[m] - r.q.ans) }; });
+      const pts = rankPoints(ok, function (a, b) { return a.v - b.v; });
+      ok.forEach(function (e) { if (e.v === 0) pts[e.m] += 50; });
+      return { pts: pts, info: {} };
+    },
+    round: function (x, r) {
+      return quizRound(x, r, x.q.ans.toLocaleString() + "원", h("p", { class: "note", text: "기준: " + (x.q.basis || "두목 기준") }));
+    }
+  },
+  memory: {
+    rounds: 5, qSec: 30, input: "memory", rules: ["기호 배열이 잠깐 보였다가 사라져요. 순서대로 눌러서 맞혀요.", "라운드가 갈수록 배열이 길어져요. 다 맞히면 100점 + 속도 보너스, 틀리면 맞힌 칸까지 10점씩."],
+    makeQ: function (r) {
+      const sym = ["🔥", "👊", "💣", "🍗", "🎲", "⭐", "🐊", "💰"], n = 3 + (r.rn || 1) + (r.rn > 3 ? 1 : 0), seq = [];
+      for (let i = 0; i < n; i++) seq.push(Math.floor(Math.random() * sym.length));
+      return { key: "m" + r.rn, text: n + "개를 기억하세요!", sym: sym, seq: seq, show: 1500 + n * 450 };
+    },
+    resolve: function (r) {
+      const subs = r.subs || {}, subT = r.subT || {}, lim = 30000, pts = {}, seq = r.q.seq;
+      r.lineup.forEach(function (m) {
+        const v = subs[m]; if (!Array.isArray(v)) return;
+        let k = 0; while (k < seq.length && v[k] === seq[k]) k++;
+        pts[m] = k === seq.length && v.length === seq.length ? 100 + Math.round(40 * Math.max(0, 1 - (subT[m] || lim) / lim)) : k * 10;
+        if (!pts[m]) delete pts[m];
+      });
+      return { pts: pts, info: {} };
+    },
+    round: function (x, r) { return quizRound(x, r, x.q.seq.map(function (i) { return x.q.sym[i]; }).join(" ")); }
+  }
+});
+/* boss-only list editors stored in config/{doc} as plain text lines */
+function listEditor(docId, field, title, hint, placeholder) {
+  const key = "ed-" + docId, cur = (S.cfg[docId] || {})[field] || "";
+  if (S.drafts[key] == null) S.drafts[key] = cur;
+  const ta = draft("textarea", key, { class: "gb-in", placeholder: placeholder });
+  return h("div", { class: "panel" }, h("div", { class: "field-label", text: "두목 전용 · " + title }),
+    h("p", { class: "hint", text: hint }), ta,
+    h("button", { type: "button", class: "save", onclick: async function () {
+      try { const o = {}; o[field] = S.drafts[key] || ""; o.updatedAt = serverTimestamp(); await setDoc(doc(db, "config", docId), o); toast("저장했어요."); } catch (e) { toast(errText(e)); }
+    }, text: "저장" }));
+}
+PARTY.price.editor = function () {
+  return listEditor("prices", "text", "가격 문제 등록", "한 줄에 하나씩 ‘상품|가격|기준’ 형식으로 적어요. 기준에는 날짜와 장소를 써 주세요.", "예: 편의점 참치마요 삼각김밥|1500|2025년 11월 ○○편의점");
+};
+function priceList() {
+  return String((S.cfg.prices || {}).text || "").split("\n").map(function (l) {
+    const p = l.split("|"); const price = parseInt(String(p[1] || "").replace(/[^0-9]/g, ""), 10);
+    return p[0] && p[0].trim() && price > 0 ? { name: p[0].trim(), price: price, basis: (p[2] || "").trim() } : null;
+  }).filter(Boolean);
+}
+/* synthesized melody for the music quiz (public-domain tunes) */
+function playMelody(q) {
+  const c = ac(); if (!c || !q || !q.n) return;
+  const beat = 60 / (q.bpm || 110), t0 = c.currentTime + 0.05, t = q.n.trim().split(/\s+/);
+  let at = 0;
+  for (let i = 0; i + 1 < t.length; i += 2) {
+    const len = parseFloat(t[i + 1]) * beat, m = /^([A-G])(#|b)?(\d)$/.exec(t[i]);
+    if (m) {
+      const midi = 12 * (+m[3] + 1) + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]] + (m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0);
+      tone(midiHz(midi), Math.max(0.12, len * 0.9), { type: "triangle", gain: 0.16, at: t0 - c.currentTime + at });
+      tone(midiHz(midi), Math.max(0.12, len * 0.9), { type: "square", gain: 0.025, at: t0 - c.currentTime + at });
+    }
+    at += len;
+  }
+}
+/* memory game: show, hide, tap the sequence */
+function memoryPanel(r, me) {
+  const key = r.id + ":" + r.phase, q = r.q;
+  if (lpReset(key)) { LP.state = "show"; LP.ans = []; LP.timer = setTimeout(function () { if (LP.key === key) { LP.state = "input"; LP.t0 = Date.now(); render(); } }, q.show); }
+  const done = (r.subs || {})[me.id] != null;
+  if (done) return h("div", { class: "rf-pad done", text: "제출 완료! 결과를 기다려요" });
+  if (LP.state === "show") return h("div", { class: "mem-show" }, q.seq.map(function (i) { return h("span", { text: q.sym[i] }); }));
+  return h("div", { class: "mem-in" },
+    h("div", { class: "mem-ans" }, q.seq.map(function (_, k) { return h("span", { text: LP.ans[k] != null ? q.sym[LP.ans[k]] : "?" }); })),
+    h("div", { class: "mem-pad" }, q.sym.map(function (s, i) {
+      return h("button", { type: "button", class: "px-btn", text: s, onclick: function () { if (LP.ans.length < q.seq.length) { LP.ans.push(i); sfx("click"); render(); } } });
+    })),
+    h("div", { class: "op-row" },
+      h("button", { type: "button", onclick: function () { LP.ans.pop(); render(); }, text: "⌫ 지우기" }),
+      h("button", { type: "button", class: "go", disabled: LP.ans.length !== q.seq.length, onclick: function () { if (!LP.sent) { LP.sent = true; pSubmit(LP.ans.slice()); } }, text: "제출" })));
+}
+
 function partyDef(r) { return r && PARTY[r.type]; }
 function partyRounds(r) { const d = PARTY[r.type]; return [3, 5, 7].indexOf(r.prounds) >= 0 ? r.prounds : d.rounds; }
 async function pStart() {
@@ -3722,22 +3904,25 @@ async function pStart() {
       const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < g.min) throw { code: "few", n: g.min };
       if (lineup.length > g.max) throw { code: "many", n: g.max };
+      if (d.canStart && d.canStart()) throw { code: "cant", msg: d.canStart() };
       const base = Object.assign({}, r, { lineup: lineup, hist: [], rn: 1, ext: {} });
       const game = (r.game || 0) + 1;
       sysMsg(tx, { game: game }, g.icon + " " + g.name + " 시작! " + partyRounds(r) + "라운드");
-      tx.update(roomRef(), nextPhase(r, { status: "q", lineup: lineup, rn: 1, total: partyRounds(r), q: d.makeQ(base), subs: {}, scores: {}, hist: [], ext: {}, game: game, startedAt: serverTimestamp() }));
+      tx.update(roomRef(), nextPhase(r, { status: "q", lineup: lineup, rn: 1, total: partyRounds(r), q: d.makeQ(base), subs: {}, subT: {}, scores: {}, hist: [], ext: {}, game: game, startedAt: serverTimestamp() }));
     });
   } catch (e) {
     if (e && e.code === "few") toast(e.n + "명 이상 모여야 시작할 수 있어요.");
     else if (e && e.code === "many") toast("최대 " + e.n + "명까지 할 수 있어요.");
     else if (e && e.code === "phase") toast("이미 게임이 시작됐어요.");
+    else if (e && e.code === "cant") toast(e.msg);
     else toast(errText(e));
   }
 }
 async function pSubmit(val) {
   const me = meMember(), r = S.room; if (!me || !r || r.status !== "q") return;
   try {
-    await updateDoc(roomRef(), { ["subs." + me.id]: val });
+    const el = r.phaseAt && r.phaseAt.toMillis ? Math.max(0, Date.now() - r.phaseAt.toMillis()) : 0;
+    await updateDoc(roomRef(), { ["subs." + me.id]: val, ["subT." + me.id]: el });
     await pMaybeResolve();
   } catch (e) { toast(errText(e)); }
 }
@@ -3772,7 +3957,7 @@ async function pNext(expectPhase) {
     if (!r || r.status !== "rr" || (expectPhase != null && r.phase !== expectPhase)) return;
     if ((r.rn || 1) >= (r.total || 1)) { sysMsg(tx, r, "🏁 게임 끝! 결과를 확인하세요."); tx.update(roomRef(), nextPhase(r, { status: "result" })); return; }
     const rn = (r.rn || 1) + 1, base = Object.assign({}, r, { rn: rn });
-    tx.update(roomRef(), nextPhase(r, { status: "q", rn: rn, q: PARTY[r.type].makeQ(base), subs: {} }));
+    tx.update(roomRef(), nextPhase(r, { status: "q", rn: rn, q: PARTY[r.type].makeQ(base), subs: {}, subT: {} }));
   });
 }
 /* 악어 이빨: 내 차례에 이빨 하나 누르기 (시간이 지나면 아무 이빨이나 자동) */
@@ -3915,6 +4100,8 @@ function screenPartyRoom(r) {
             h("button", { type: "button", onclick: leaveRoom, text: "방 나가기" }),
             h("button", { type: "button", class: "go", disabled: !ok, onclick: pStart, text: ok ? "게임 시작" : n < g.min ? g.min + "명부터 시작" : "최대 " + g.max + "명" }))
           : h("button", { type: "button", class: "save", onclick: joinRoom, text: "이 방에 참가하기" }),
+      d.canStart && d.canStart() ? h("p", { class: "msg err", text: d.canStart() }) : null,
+      d.editor && isBoss() ? d.editor() : null,
       h("details", { class: "guide" }, h("summary", { text: "규칙" }), h("div", { class: "guide-body" }, gameRules(g))));
   } else if (r.status === "result") {
     const sc = r.scores || {}, rank = (r.lineup || []).slice().sort(function (a, b) { return (sc[b] || 0) - (sc[a] || 0); });
@@ -3935,30 +4122,34 @@ function screenPartyRoom(r) {
     });
     let panel;
     if (r.status === "q") {
-      const mine = me ? subs[me.id] : undefined, can = isPlayer && (!d.canSubmit || d.canSubmit(r, me.id));
+      const mine = me ? subs[me.id] : undefined, can = isPlayer && (!d.canSubmit || d.canSubmit(r, me.id)), IN = q.input || d.input;
       let input = null;
       if (!isPlayer) input = h("p", { class: "note", text: "관전 중이에요." });
       else if (!can) input = h("p", { class: "note", text: r.type === "loyalty" ? "이번 라운드는 휴식이에요. ☕" : "이번엔 쉬어요." });
-      else if (d.input === "choice") input = h("div", { class: "pq-choices" }, q.opts.map(function (o, k) {
+      else if (IN === "choice") input = h("div", { class: "pq-choices" }, q.opts.map(function (o, k) {
         return h("button", { type: "button", class: "pq-opt" + (mine === k ? " on" : ""), onclick: function () { sfx("click"); pSubmit(k); }, text: o });
       }));
-      else if (d.input === "number") {
+      else if (IN === "number") {
         const inp = draft("input", "pq-num", { type: "number", class: "text-in", min: "0", max: String(q.max), inputmode: "numeric", placeholder: "0 ~ " + q.max + (q.unit ? " " + q.unit : "") });
         const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm go", text: mine != null ? "바꾸기" : "제출" }));
         f.addEventListener("submit", function (ev) { ev.preventDefault(); const v = Math.round(+(S.drafts["pq-num"] || inp.value)); if (!(v >= 0 && v <= q.max)) { toast("0~" + q.max + " 사이로 넣어주세요."); return; } sfx("click"); pSubmit(v); });
         input = h("div", null, f, mine != null ? h("p", { class: "hint", text: "제출함: " + mine + (q.unit ? q.unit : "") + " (마감 전까지 바꿀 수 있어요)" }) : null);
-      } else if (d.input === "text") {
+      } else if (IN === "text") {
         const inp = draft("input", "pq-text", { type: "text", class: "text-in", maxlength: "30", placeholder: "답 입력" });
         const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm go", text: mine != null ? "바꾸기" : "제출" }));
         f.addEventListener("submit", function (ev) { ev.preventDefault(); const v = (S.drafts["pq-text"] || inp.value || "").trim(); if (!v) return; sfx("click"); pSubmit(v.slice(0, 30)); });
         input = h("div", null, f, mine != null ? h("p", { class: "hint", text: "제출함: “" + mine + "”" }) : null);
-      } else if (d.input === "member") input = h("div", { class: "vote-grid" }, lineup.filter(function (p) { return p !== me.id; }).map(function (p) {
+      } else if (IN === "member") input = h("div", { class: "vote-grid" }, lineup.filter(function (p) { return p !== me.id; }).map(function (p) {
         return h("button", { type: "button", class: "vote-btn", "aria-pressed": mine === p ? "true" : "false", onclick: function () { sfx("click"); pSubmit(p); } }, h("div", { class: "vp" }, photoBox(findMember(p) || {})), h("span", { text: nickOf(p) }));
       }));
-      else if (d.input === "reflex") input = reflexPanel(r, me);
-      else if (d.input === "timer") input = timerPanel(r, me);
-      else if (d.input === "typing") input = typingPanel(r, me);
-      else if (d.input === "croc") {
+      else if (IN === "name") input = h("div", { class: "chips pq-names" }, S.members.map(function (m) {
+        return h("button", { type: "button", class: "chip", "aria-pressed": mine === m.id ? "true" : "false", onclick: function () { sfx("click"); pSubmit(m.id); }, text: m.nick });
+      }));
+      else if (IN === "memory") input = memoryPanel(r, me);
+      else if (IN === "reflex") input = reflexPanel(r, me);
+      else if (IN === "timer") input = timerPanel(r, me);
+      else if (IN === "typing") input = typingPanel(r, me);
+      else if (IN === "croc") {
         const who = q.order[q.turn % q.order.length], myTurn = me && who === me.id;
         input = h("div", { class: "croc" },
           h("div", { class: "croc-head", text: "🐊" }),
@@ -3971,9 +4162,10 @@ function screenPartyRoom(r) {
       panel = h("div", { class: "panel turn" + (r.type === "croc" ? "" : " pq") },
         timerEl(r, r.type === "croc" ? "차례 남은 시간" : "남은 시간"),
         h("p", { class: "pq-text", text: q.text }),
+        d.extra ? d.extra(r) : null,
         r.type === "typing" && !(subs[me && me.id] != null) && LP.state === "type" ? h("p", { class: "type-src", text: q.text }) : null,
         input,
-        r.type === "croc" || d.input === "reflex" ? null : h("p", { class: "hint", text: "제출 " + doneN + " / " + expected.length + " · 다른 사람 선택은 결과 때 공개돼요" }));
+        r.type === "croc" || IN === "reflex" ? null : h("p", { class: "hint", text: "제출 " + doneN + " / " + expected.length + " · 다른 사람 선택은 결과 때 공개돼요" }));
     } else {
       const x = (r.hist || [])[(r.hist || []).length - 1];
       panel = h("div", { class: "panel pr" },

@@ -151,3 +151,16 @@
   .exit-btn { min-height: 32px; padding: 3px 10px; font-size: 12px; }
 }
 @media (max-width: 559px) { .gc-head::after { display: none; } }
+/* quiz room */
+.pq-hint { margin: 0; text-align: center; font-size: 13px; color: var(--muted); font-family: var(--font-mono); }
+.pq-names { justify-content: center; }
+.pq-names .chip { min-height: 38px; padding: 6px 14px; font-size: 14px; }
+.pq-choices .pq-opt:nth-child(3) { border-top-color: #e2a21b; } .pq-choices .pq-opt:nth-child(4) { border-top-color: #2f9e57; }
+.zoom-box { width: min(100%, 190px); aspect-ratio: 1; margin: 0 auto; overflow: hidden; border: 1px solid var(--line); background: var(--raised); }
+.zoom-box > div { width: 100%; height: 100%; }
+.mem-show { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 18px 8px; font-size: 34px; border: 1px solid var(--red); background: var(--red-soft); }
+.mem-in { display: grid; gap: 10px; }
+.mem-ans { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; font-size: 24px; }
+.mem-ans span { min-width: 36px; height: 40px; display: grid; place-items: center; border: 1px dashed var(--line); }
+.mem-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.mem-pad .px-btn { font-size: 24px; min-height: 52px; }
