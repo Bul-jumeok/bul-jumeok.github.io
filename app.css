@@ -1090,3 +1090,4 @@ img { max-width: 100%; }
 .hint-board li.me b::after { content: " (나)"; font-weight: 400; color: var(--faint); font-size: 11px; }
 .liar-next, .liar-final { display: grid; gap: 12px; margin-top: 8px; }
 @media (min-width: 960px) { .hint-board li { font-size: 16px; grid-template-columns: 80px minmax(0, 1fr); } }
+.case-author { margin: -4px 0 0; font-size: 13px; color: var(--muted); }

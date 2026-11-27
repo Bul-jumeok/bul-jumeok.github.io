@@ -894,12 +894,14 @@ function briefing() {
 }
 
 /* ----- case list / detail ----- */
+function canEditCase(x) { return isBoss() || !!(x && S.user && x.authorUid && x.authorUid === S.user.uid); }
+function canWriteCase() { return isBoss() || !!(meMember() && S.user); }
 function caseItem(x) {
   return h("li", null, h("button", { type: "button", class: "case-item", onclick: function () { go("case-" + x.id); } },
     h("span", { class: "ci-date", text: fmtDate(x.date) }),
     h("b", { class: "ci-title", text: x.title }),
     x.desc ? h("span", { class: "ci-desc", text: x.desc }) : null,
-    h("span", { class: "ci-meta", text: ((x.members || []).map(nickOf).join(", ") || "관련 조직원 없음") + (x.hasShot ? " · 📷 스크린샷" : "") })));
+    h("span", { class: "ci-meta", text: ((x.members || []).map(nickOf).join(", ") || "관련 조직원 없음") + (x.hasShot ? " · 📷 스크린샷" : "") + (x.authorId ? " · ✍️ " + nickOf(x.authorId) : "") })));
 }
 function screenCases(mid, idx) {
   let list = S.incidents, sub = "발생일 최신순이에요. 사건을 누르면 자세히 볼 수 있어요.", eyebrow = "조직 사건일지", title = "사건 " + S.incidents.length + "건";
@@ -914,9 +916,9 @@ function screenCases(mid, idx) {
   return h("section", { class: "screen" }, back,
     h("div", { class: "sec-head" },
       h("div", null, h("span", { class: "eyebrow", text: eyebrow }), h("h2", { text: title }), h("p", { text: sub })),
-      !mid && isBoss() ? h("button", { class: "add-btn", type: "button", onclick: function () { openCaseEditor(null); }, text: "사건 등록" }) : null),
+      !mid && canWriteCase() ? h("button", { class: "add-btn", type: "button", onclick: function () { openCaseEditor(null); }, text: "사건 등록" }) : null),
     list.length ? h("ul", { class: "case-list" }, list.map(caseItem))
-      : h("div", { class: "empty", text: S.incidentsReady ? (isBoss() ? "아직 기록된 사건이 없어요. ‘사건 등록’으로 첫 사건을 남겨 보세요." : "아직 기록된 사건이 없어요.") : "사건일지를 불러오는 중…" }),
+      : h("div", { class: "empty", text: S.incidentsReady ? (canWriteCase() ? "아직 기록된 사건이 없어요. ‘사건 등록’으로 첫 사건을 남겨 보세요." : "아직 기록된 사건이 없어요. 본부에서 신원을 고르면 사건을 등록할 수 있어요.") : "사건일지를 불러오는 중…" }),
     mid ? h("button", { type: "button", class: "ghost wide", onclick: function () { go("cases"); }, text: "사건일지 전체 보기" }) : null);
 }
 /* comments (사건일지, 익명 제보): written under each member's own name. One live list per post on screen. */
@@ -1037,7 +1039,7 @@ function screenCase(id) {
     return h("li", null, h("button", { type: "button", class: "case-charge", onclick: function () { go("m-" + mid); } },
       h("span", { class: "cc-who", text: nickOf(mid) }), h("span", { class: "cc-text", text: text })));
   });
-  const ops = isBoss() ? (S.caseConfirm === id
+  const ops = canEditCase(x) ? (S.caseConfirm === id
     ? h("div", { class: "confirm" }, h("p", { text: "‘" + x.title + "’ 사건을 삭제할까요? 스크린샷도 같이 지워져요." }),
         h("div", { class: "op-row" },
           h("button", { type: "button", onclick: function () { S.caseConfirm = null; render(); }, text: "취소" }),
@@ -1052,6 +1054,7 @@ function screenCase(id) {
     h("article", { class: "case-file" },
       h("div", { class: "case" }, h("span", null, "사건번호 ", h("b", { text: "CASE-" + (x.date || "").replace(/-/g, "") })), h("span", { text: fmtDate(x.date) })),
       h("h2", { class: "case-title", text: x.title }),
+      x.authorId ? h("p", { class: "case-author", text: "✍️ 기록: " + nickOf(x.authorId) }) : null,
       x.desc ? h("p", { class: "statement", text: x.desc }) : null,
       shotEl,
       h("div", { class: "field" }, h("div", { class: "field-label", text: "관련 조직원" }),
@@ -1136,6 +1139,9 @@ function openCaseEditor(x) {
     const rec = { title: t, date: d, desc: desc.value.trim(), members: dr.members.slice(),
       charges: dr.charges.filter(function (k) { return dr.members.indexOf(k.slice(0, k.indexOf("|"))) >= 0; }),
       hasShot: hasShot, updatedAt: serverTimestamp(), createdAt: x && x.createdAt ? x.createdAt : serverTimestamp() };
+    /* remember who wrote it, so they (and the boss) can edit it later */
+    if (x && x.authorUid) { rec.authorUid = x.authorUid; rec.authorId = x.authorId || null; rec.authorNick = x.authorNick || ""; }
+    else if (!x && meMember()) { rec.authorUid = S.user.uid; rec.authorId = meMember().id; rec.authorNick = meMember().nick; }
     saveBtn.disabled = true; saveBtn.textContent = "저장 중…";
     try {
       const bt = writeBatch(db);

@@ -83,9 +83,21 @@ service cloud.firestore {
       allow write: if isBoss();
     }
     // Case log, screenshots and gatherings: everyone reads, only the boss writes.
+    // Case log: any member can post a case; the writer and the boss can edit or delete it.
+    function validCase() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['title', 'date', 'desc', 'members', 'charges', 'hasShot', 'updatedAt', 'createdAt', 'authorUid', 'authorId', 'authorNick'])
+        && shortText(d.title, 80) && d.date is string && d.date.size() == 10
+        && (!('desc' in d) || (d.desc is string && d.desc.size() <= 1000))
+        && d.members is list && d.members.size() <= 40 && d.charges is list && d.charges.size() <= 80;
+    }
     match /incidents/{id} {
       allow read: if true;
       allow write: if isBoss();
+      allow create: if signedIn() && validCase() && request.resource.data.authorUid == request.auth.uid;
+      allow update: if signedIn() && resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorUid == request.auth.uid && validCase();
+      allow delete: if signedIn() && resource.data.authorUid == request.auth.uid;
       // comments: everyone signed in writes under their own sign-in; they or the boss can delete
       match /comments/{cid} {
         allow read: if true;
@@ -100,6 +112,10 @@ service cloud.firestore {
     match /incidentShots/{id} {
       allow read: if true;
       allow write: if isBoss();
+      allow create, update: if signedIn()
+        && getAfter(/databases/$(database)/documents/incidents/$(id)).data.authorUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['data']) && request.resource.data.data is string;
+      allow delete: if signedIn() && get(/databases/$(database)/documents/incidents/$(id)).data.authorUid == request.auth.uid;
     }
     match /gatherings/{id} {
       allow read: if true;
