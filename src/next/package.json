@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "불주먹조직 비밀본부",
   "scripts": {
-    "build": "cat src/base.css src/extra.css src/pixel.css > app.css && esbuild src/main.js --bundle --format=esm --minify --target=es2019,safari14 --loader:.txt=text --outfile=app.js && node stamp.js",
+    "build": "cat src/base.css src/extra.css src/center.css > app.css && esbuild src/main.js --bundle --format=esm --minify --target=es2019,safari14 --loader:.txt=text --outfile=app.js && node stamp.js",
     "emulators": "firebase emulators:start --only firestore,auth --project demo-bulfist"
   },
   "keywords": [],
