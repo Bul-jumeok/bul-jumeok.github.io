@@ -11,7 +11,8 @@ import {
 } from "firebase/firestore";
 import LOGO from "./logo.txt";
 import { AQ_BANK } from "./assoc_bank.js";
-import { SK_MORE } from "./sketch_words.js";
+import { SK_MORE, SK_HARD } from "./sketch_words.js";
+import { CAROLS, songBars, chordNotes } from "./carols.js";
 
 /* ---------- Firebase ---------- */
 const firebaseConfig = {
@@ -326,7 +327,14 @@ const MOODS = {
   night:  { bpm: 96, swing: 0, vol: 0.85, cut: 2600, lead: "triangle", chords: [[38, 50, 53, 57], [38, 50, 53, 57], [46, 50, 53, 58], [45, 49, 52, 57]], mel: [0, 2, 1, 0, 3, 2, 1, 2], dark: true }
 };
 function midiHz(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+const CAROL_SEASON = [10, 11, 0, 1].indexOf(new Date().getMonth()) >= 0;   /* 11월~2월 */
+const CAROL_FOR = { lounge: "wish", calm: "jingle", play: "deck", mafia: "bells", night: "silent" };
 function bgmMoodFor() {
+  if (currentRoute() === "game-manito") return "carol:jingle";
+  const m = bgmRoomMood();
+  return m && CAROL_SEASON && CAROL_FOR[m] ? "carol:" + CAROL_FOR[m] : m;
+}
+function bgmRoomMood() {
   if (currentRoute().indexOf("room-") !== 0) return null;
   const R = S.room;
   if (!R || R.status === "closed") return null;
@@ -349,7 +357,8 @@ function bgmSet(mood) {
   if (mood) { BGM.timer = setInterval(bgmTick, 250); bgmTick(); }
 }
 function bgmTick() {
-  const M = MOODS[BGM.mood]; if (!M) return;
+  const carol = BGM.mood && BGM.mood.indexOf("carol:") === 0 ? CAROLS[BGM.mood.slice(6)] : null;
+  const M = carol ? { vol: carol.soft ? 0.8 : 0.95, cut: carol.soft ? 3200 : 6000, bpm: carol.bpm } : MOODS[BGM.mood]; if (!M) return;
   const c = ac(); if (!c || c.state !== "running") return;
   if (!BGM.master) {
     const g = c.createGain(), f = c.createBiquadFilter();
@@ -359,7 +368,11 @@ function bgmTick() {
     BGM.master = g; BGM.next = c.currentTime + 0.15; BGM.bar = 0;
   }
   if (BGM.next < c.currentTime) BGM.next = c.currentTime + 0.05;
-  while (BGM.next < c.currentTime + 1.5) { bgmBar(c, M, BGM.next); BGM.next += 240 / M.bpm; BGM.bar++; }
+  while (BGM.next < c.currentTime + 1.5) {
+    if (carol) { carolBar(c, carol, BGM.next); BGM.next += carol.beats * 60 / carol.bpm; }
+    else { bgmBar(c, M, BGM.next); BGM.next += 240 / M.bpm; }
+    BGM.bar++;
+  }
 }
 function bgmVoice(c, out, hz, t, dur, o) {
   const os = c.createOscillator(), g = c.createGain();
@@ -377,6 +390,36 @@ function bgmNoise(c, out, t, dur, f, gain, type) {
   g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   src.connect(fl); fl.connect(g); g.connect(out);
   src.start(t, Math.random()); src.stop(t + dur + 0.02);
+}
+/* carols: melody + chord accompaniment + soft drums and sleigh bells */
+const CAROL_BARS = {};
+function carolBar(c, song, t) {
+  const bars = CAROL_BARS[song.name] || (CAROL_BARS[song.name] = songBars(song));
+  const out = BGM.master, bar = bars[BGM.bar % bars.length], beat = 60 / song.bpm, B = song.beats;
+  const half = bar.chords.length > 1 ? B / 2 : B;
+  bar.chords.forEach(function (name, ci) {
+    const cn = chordNotes(name), t0 = t + ci * half * beat;
+    /* bass on beat 1 (and the middle beat in 4/4) */
+    bgmVoice(c, out, midiHz(cn[0] - 12), t0, half * beat * 0.9, { type: "triangle", gain: song.soft ? 0.16 : 0.22 });
+    if (!song.soft && half >= 2) bgmVoice(c, out, midiHz(cn[0] - 5), t0 + 2 * beat, beat * 0.9, { type: "triangle", gain: 0.16 });
+    /* off-beat chord stabs, or soft held chords for slow songs */
+    if (song.soft) cn.slice(1).forEach(function (n) { bgmVoice(c, out, midiHz(n + 12), t0, half * beat, { type: "sine", gain: 0.035, attack: 0.25 }); });
+    else for (let b = 0; b < half; b++) cn.forEach(function (n, k) { if (k) bgmVoice(c, out, midiHz(n + 12), t0 + (b + 0.5) * beat, beat * 0.35, { type: "square", gain: 0.012 }); });
+  });
+  /* melody */
+  bar.notes.forEach(function (x) {
+    if (x[0] == null) return;
+    const len = x[2] * beat;
+    bgmVoice(c, out, midiHz(x[0] + 12), t + x[1] * beat, Math.max(0.12, len * 0.92), { type: song.soft ? "triangle" : "square", gain: song.soft ? 0.11 : 0.05, attack: song.soft ? 0.03 : 0.005 });
+  });
+  /* drums + sleigh bells */
+  for (let i = 0; i < B * 2; i++) {
+    const tt = t + i * beat / 2;
+    if (!song.soft && i % (B * 2) === 0) bgmVoice(c, out, 140, tt, 0.15, { type: "sine", gain: 0.42, slide: 45 });
+    if (!song.soft && B === 4 && i === 4) bgmNoise(c, out, tt, 0.1, 1800, 0.12);
+    if (song.minor && i % 2 === 0) bgmNoise(c, out, tt, 0.03, 8000, 0.03);
+    if (song.bells) { bgmNoise(c, out, tt, 0.09, 6500, i % 2 ? 0.05 : 0.09, "highpass"); bgmVoice(c, out, 2637, tt, 0.06, { type: "sine", gain: 0.012 }); }
+  }
 }
 /* one bar = 16 sixteenth notes */
 function bgmBar(c, M, t) {
@@ -2885,7 +2928,7 @@ function mChat(r, ctx) {
 /* ---------- 연상퀴즈: 힌트가 하나씩 열리고, 먼저 맞힐수록 고득점 ---------- */
 const AQDUR = { clue: 40, reveal: 6 };
 if (FAST) Object.keys(AQDUR).forEach(function (k) { AQDUR[k] = Math.max(2, Math.round(AQDUR[k] / FAST)); });
-const AQ_HINTS = 5, AQ_TRIES = 3;
+const AQ_HINTS = 5, AQ_TRIES = 2;
 const AQ = { key: null, idx: -1 };
 /* 오늘 나온 문제는 오늘 다시 안 나와요: 오늘 쓰인 방들의 기록을 모아서 빼요 */
 function todayKey() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -3205,6 +3248,7 @@ try { const v = +localStorage.getItem("bf-pen"); if (v >= 2 && v <= 40) SK.size 
 /* Surprise names: never announced in the UI. Default list until the boss saves one. */
 const SK_DEFAULT_NAMES = ["주먹이", "연상퀴즈", "올라올라", "서바이벌꼬로록"];
 const SK_SURPRISE = 0.1;
+const SK_HARD_SHARE = 0.5;   /* 어려운 단어 비율 */
 function skCrewWords() {
   const seen = {}, out = [];
   function add(w) { w = String(w || "").trim(); if (w && !seen[w]) { seen[w] = 1; out.push(w); } }
@@ -3216,7 +3260,7 @@ function skPickWord(mode, used, today) {
   const crew = skCrewWords(), general = SK_WORDS;
   /* rare: about one drawing in ten, and at most once per game */
   const already = (used || []).some(function (w) { return crew.indexOf(w) >= 0; });
-  const pool = crew.length && !already && Math.random() < SK_SURPRISE ? crew : general;
+  const pool = crew.length && !already && Math.random() < SK_SURPRISE ? crew : Math.random() < SK_HARD_SHARE ? SK_HARD : general;
   const notRoom = pool.filter(function (w) { return (used || []).indexOf(w) < 0; });
   let fresh = notRoom.filter(function (w) { return (today || []).indexOf(w) < 0; });
   if (!fresh.length) fresh = notRoom.length ? notRoom : pool;
@@ -3862,10 +3906,10 @@ const SM = {
   burn: 5,        /* % of the cigarette per second while inhaling */
   deep: 0.6,      /* from here inhaling burns faster */
   deepMult: 1.6,
-  safe: 0.1,      /* breathing out below this makes the next inhale safe */
-  riskSpan: 0.35, /* above `safe`, cough chance grows to 100% over this much air */
-  coughMs: 3500,
-  coughLoss: 5
+  safe: 0.07,     /* breathing out below this makes the next inhale safe */
+  riskSpan: 0.28, /* above `safe`, cough chance grows to 100% over this much air */
+  coughMs: 4500,
+  coughLoss: 8
 };
 const KILLER_LINES = ["꼴찌는 용서 못 해.", "담배 하나 제대로 못 피우나?", "본부에 꼴찌 자리는 없다.", "다음 생엔 폐활량부터 키워라.", "연기만 뿜다 가는구나."];
 const SMK = { rk: null, unsub: null, live: {}, holding: false, L: 0, prog: 0, coughUntil: 0, coughWhy: "", done: false, fin: null,
@@ -4127,7 +4171,7 @@ function screenSmokeLobby() {
       h("div", { class: "guide-body" },
         h("ol", null,
           h("li", { text: "버튼을 꾹 누르고 있으면 들숨, 떼면 날숨이에요. 들이마시는 동안만 담배가 타요." }),
-          h("li", { text: "숨이 얼마나 찼는지는 화면에 안 나와요. 들이마시는 소리가 높아질수록 꽉 찬 거예요. 깊게 마실수록 더 빨리 타지만, 너무 오래 마시면 콜록콜록! 3.5초 동안 못 피우고 담배도 조금 날아가요." }),
+          h("li", { text: "숨이 얼마나 찼는지는 화면에 안 나와요. 들이마시는 소리가 높아질수록 꽉 찬 거예요. 깊게 마실수록 더 빨리 타지만, 너무 오래 마시면 콜록콜록! " + (SM.coughMs / 1000) + "초 동안 못 피우고 담배도 " + SM.coughLoss + "% 날아가요." }),
           h("li", { text: "떼면 ‘후~’ 하고 내쉬어요. 그 소리가 끝나기 전에 또 누르면 덜 내쉰 만큼 기침할 확률이 커져요. 소리를 잘 듣고 감으로 리듬을 타세요." }),
           h("li", { text: "40초 안에 한 개비를 다 못 피우면 킬러에게 탕! 못 피운 사람은 전부 죽어요." }),
           h("li", { text: "모두 다 피웠으면 제일 늦게 피운 한 명이 탈락해요. 마지막 1인이 남을 때까지 계속해요." }),
