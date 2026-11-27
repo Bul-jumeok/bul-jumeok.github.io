@@ -1257,3 +1257,33 @@ img { max-width: 100%; }
 .mem-ans span { min-width: 36px; height: 40px; display: grid; place-items: center; border: 1px dashed var(--line); }
 .mem-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .mem-pad .px-btn { font-size: 24px; min-height: 52px; }
+/* social + luck */
+.pr-quote { margin: 0; padding: 10px 12px; border-left: 3px solid var(--red); background: var(--raised); font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.cand-list { display: grid; gap: 8px; }
+.cand { display: grid; gap: 4px; text-align: left; padding: 10px 12px; background: var(--raised); border: 1px solid var(--line); border-radius: 3px; color: var(--fg); font-size: 15px; overflow-wrap: anywhere; }
+.cand.on { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); background: var(--red-soft); }
+.cand[disabled] { opacity: 0.5; cursor: default; } .cand small { color: var(--muted); font-family: var(--font-mono); font-size: 10px; }
+.meme { position: relative; width: min(100%, 220px); margin: 0 auto; border: 1px solid var(--line); background: var(--raised); }
+.meme-ph { aspect-ratio: 1; } .meme-ph > div { width: 100%; height: 100%; }
+.meme-cap { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 6px 8px; background: rgba(0, 0, 0, 0.72); color: #fff; font-family: var(--font-display); font-size: 17px; text-align: center; line-height: 1.25; }
+.meme-card { display: grid; gap: 4px; } .meme-card.win .meme { border-color: var(--red); }
+.novel { display: grid; gap: 8px; }
+.chest-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.chest { display: grid; gap: 2px; text-align: center; padding: 8px 4px; border: 1px solid var(--line); background: var(--raised); font-size: 13px; }
+.chest.good { border-color: #3fa86b; } .chest.bad { border-color: var(--red); } .chest small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.race { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); background: repeating-linear-gradient(90deg, var(--raised) 0 20px, var(--surface) 20px 40px); }
+.lane { position: relative; height: 34px; border-bottom: 1px dashed var(--line); }
+.lane b { position: absolute; left: 40px; top: 8px; font-size: 12px; color: var(--muted); }
+.runner { position: absolute; left: 0; top: 2px; width: 30px; height: 30px; overflow: hidden; border: 1px solid var(--line); animation: run var(--t) cubic-bezier(.3,.1,.6,1) forwards; }
+.runner > div { width: 100%; height: 100%; }
+@keyframes run { to { left: calc(100% - 32px); } }
+.ladder-box svg { width: 100%; max-width: 360px; display: block; margin: 0 auto; }
+.lpath { stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw-path 2.4s ease-in-out forwards; }
+@keyframes draw-path { to { stroke-dashoffset: 0; } }
+.bl-wrap { display: grid; justify-items: center; gap: 8px; }
+.balloon { display: grid; place-items: center; min-height: 170px; } .balloon span { line-height: 1; transition: font-size 0.12s; }
+.bomb-mine { display: grid; gap: 8px; }
+.croc.pirate .croc-teeth { background: #3b2412; border-color: #b8793c; }
+.croc.pirate .tooth { width: 26px; height: 26px; border-radius: 50%; background: #1c1d20; border-color: #b8793c; }
+.croc.pirate .tooth:not([disabled]):hover { background: #b8793c; }
+@media (prefers-reduced-motion: reduce) { .runner { animation-duration: 0.01s; } .lpath { animation: none; stroke-dashoffset: 0; } }
