@@ -154,6 +154,14 @@ service cloud.firestore {
       allow delete: if isBoss() || (signedIn() && resource.data.uid == request.auth.uid);
     }
 
+    // Who is online in the game center: each phone writes only its own heartbeat.
+    match /presence/{mid} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'm', 't', 'room', 'game', 'playing'])
+        && request.resource.data.uid == request.auth.uid && request.resource.data.m == mid;
+    }
+
     // Liar game rooms and their chat.
     match /rooms/{roomId} {
       allow read: if true;
