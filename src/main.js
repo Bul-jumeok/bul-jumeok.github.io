@@ -1915,8 +1915,8 @@ const GAME_ROWS = [
   ["stash", "두목의 비자금", "brain", "다 같이 나눠 먹을까, 욕심내다 다 날릴까.", 3, 7, 6, "new", "💰"],
   ["beauty", "0과 100 사이", "brain", "평균의 2/3에 가장 가까운 숫자를 노려라.", 3, 7, 5, "new", "🎯"],
   ["loyalty", "의리 테스트", "brain", "협력이냐 배신이냐, 짝꿍과의 심리전.", 2, 7, 6, "new", "🤝"],
-  ["bluffdice", "블러핑 주사위", "brain", "내 주사위만 보고 전체를 선언하는 허세 승부.", 3, 7, 15, "soon", "🎲"],
-  ["taboo", "금지어 게임", "brain", "남의 금지어는 보이고 내 건 안 보인다.", 3, 7, 10, "soon", "🤐"],
+  ["bluffdice", "블러핑 주사위", "brain", "내 주사위만 보고 전체를 선언하는 허세 승부.", 3, 7, 15, "new", "🎲"],
+  ["taboo", "금지어 게임", "brain", "남의 금지어는 보이고 내 건 안 보인다.", 3, 7, 10, "new", "🤐"],
   ["smoke", "빨리 담배피기", "arcade", "들숨 날숨 타이밍 싸움. 다 못 피우면 킬러가 처리한다.", 2, 7, 5, "play", "🚬", 1],
   ["reflex", "순발력 테스트", "arcade", "신호가 뜨는 순간 누구보다 빠르게.", 1, 7, 3, "new", "⚡"],
   ["tensec", "10초의 감각", "arcade", "시계 없이 정확히 10초에 멈춰라.", 1, 7, 3, "new", "⏱️"],
@@ -1940,12 +1940,12 @@ const GAME_ROWS = [
   ["music", "음악퀴즈", "quiz", "저작권 끝난 동요·민요·클래식 멜로디를 듣고 제목 맞히기.", 1, 7, 8, "new", "🎵"],
   ["movie", "영화퀴즈", "quiz", "줄거리와 등장인물로 영화 맞히기.", 1, 7, 8, "new", "🎬"],
   ["sketch", "드로잉퀴즈", "art", "한 명은 그리고, 나머지는 맞혀라.", 2, 7, 15, "play", "🖌️", 1],
-  ["telephone", "그림 전달 게임", "art", "문장 → 그림 → 문장… 전달될수록 엉망진창.", 3, 7, 12, "soon", "📨"],
+  ["telephone", "그림 전달 게임", "art", "문장 → 그림 → 문장… 전달될수록 엉망진창.", 3, 7, 12, "new", "📨"],
   ["meme", "짤 만들기", "art", "조직원 사진에 제일 웃긴 자막 달기.", 3, 7, 8, "new", "🖼️"],
-  ["copy", "똑같이 그리기", "art", "같은 그림을 보고 누가 제일 똑같이.", 2, 7, 8, "soon", "✏️"],
-  ["recall", "기억으로 그리기", "art", "잠깐 본 그림을 기억으로 그리기.", 2, 7, 8, "soon", "💭"],
+  ["copy", "똑같이 그리기", "art", "같은 그림을 보고 누가 제일 똑같이.", 2, 7, 8, "new", "✏️"],
+  ["recall", "기억으로 그리기", "art", "잠깐 본 그림을 기억으로 그리기.", 2, 7, 8, "new", "💭"],
   ["novel", "릴레이 소설", "art", "한 문장씩 이어 쓰는 막장 소설.", 3, 7, 10, "new", "📖"],
-  ["montage", "몽타주", "art", "설명만 듣고 범인 얼굴 그리기.", 2, 7, 8, "soon", "🕵️"],
+  ["montage", "몽타주", "art", "설명만 듣고 범인 얼굴 그리기.", 3, 7, 8, "new", "🕵️"],
   ["croc", "악어 이빨", "lucky", "하나는 꽝. 누르는 순간 꽉!", 2, 7, 5, "new", "🐊", 1],
   ["glass", "유리다리", "lucky", "둘 중 하나는 깨지는 유리.", 2, 7, 5, "new", "🪟"],
   ["balloon", "풍선 불기", "lucky", "욕심내면 펑, 멈추면 점수.", 2, 7, 5, "new", "🎈"],
@@ -1964,21 +1964,21 @@ const GAME_ROWS = [
   ["profile", "조직원 탐구생활", "social", "조직원 취향 퀴즈.", 3, 7, 8, "new", "🔎"],
   ["rankguess", "조직원 순위 맞히기", "social", "모두의 순위를 예상하라.", 3, 7, 8, "new", "📊"],
   ["manito", "크리스마스 마니또", "social", "몰래 챙기고 크리스마스에 정체 공개.", 3, 7, 0, "play", "🎄"],
-  ["yacht", "야추", "strategy", "주사위 다섯 개로 족보 완성.", 2, 7, 15, "soon", "🎲", 1],
-  ["baseball", "숫자 야구", "strategy", "스트라이크와 볼로 비밀 숫자 추리.", 2, 7, 8, "soon", "⚾"],
-  ["onecard", "원카드", "strategy", "같은 숫자나 무늬를 내라.", 2, 7, 10, "soon", "🂡"],
-  ["auction", "비밀 경매", "strategy", "한정된 자금으로 비밀 입찰.", 3, 7, 10, "soon", "🔨"],
-  ["omok", "오목", "strategy", "다섯 알을 먼저 잇기 (2인).", 2, 2, 10, "soon", "⚫"],
-  ["connect4", "커넥트 포", "strategy", "네 개를 먼저 잇기 (2인).", 2, 2, 8, "soon", "🔴"],
-  ["battleship", "배틀쉽", "strategy", "숨은 함대를 찾아 격침 (2인).", 2, 2, 12, "soon", "🚢"],
-  ["numtile", "숫자 타일", "strategy", "숫자 타일 수싸움.", 2, 4, 12, "soon", "🔢"],
-  ["territory", "땅따먹기", "strategy", "가장 넓은 땅을 차지하라.", 2, 7, 8, "soon", "🗺️"],
-  ["pentathlon", "오종경기", "olympics", "미니게임 5종 누적 점수 대결.", 2, 7, 15, "soon", "🏅", 1],
-  ["triathlon", "삼종경기", "olympics", "미니게임 3종 누적 점수 대결.", 2, 7, 10, "soon", "🥉"],
-  ["solo", "불주먹 개인전", "olympics", "랜덤 미니게임 누적 점수.", 2, 7, 15, "soon", "🏃"],
-  ["team", "불주먹 팀전", "olympics", "팀별 합산 점수 대결.", 4, 7, 15, "soon", "🚩"],
-  ["survivor", "최후의 생존자", "olympics", "라운드마다 꼴찌 탈락.", 3, 7, 15, "soon", "🔥"],
-  ["cup", "두목배 챔피언십", "olympics", "두목이 여는 공식 대회.", 2, 7, 30, "soon", "🏆"]
+  ["yacht", "야추", "strategy", "주사위 다섯 개로 족보 완성.", 2, 7, 15, "new", "🎲", 1],
+  ["baseball", "숫자 야구", "strategy", "스트라이크와 볼로 비밀 숫자 추리.", 2, 7, 8, "new", "⚾"],
+  ["onecard", "원카드", "strategy", "같은 숫자나 무늬를 내라.", 2, 7, 10, "new", "🂡"],
+  ["auction", "비밀 경매", "strategy", "한정된 자금으로 비밀 입찰.", 3, 7, 10, "new", "🔨"],
+  ["omok", "오목", "strategy", "다섯 알을 먼저 잇기 (2인).", 2, 2, 10, "new", "⚫"],
+  ["connect4", "커넥트 포", "strategy", "네 개를 먼저 잇기 (2인).", 2, 2, 8, "new", "🔴"],
+  ["battleship", "배틀쉽", "strategy", "숨은 함대를 찾아 격침 (2인).", 2, 2, 12, "new", "🚢"],
+  ["numtile", "숫자 타일", "strategy", "숫자 타일 수싸움.", 2, 4, 12, "new", "🔢"],
+  ["territory", "땅따먹기", "strategy", "가장 넓은 땅을 차지하라.", 2, 7, 8, "new", "🗺️"],
+  ["pentathlon", "오종경기", "olympics", "미니게임 5종 누적 점수 대결.", 2, 7, 15, "new", "🏅", 1],
+  ["triathlon", "삼종경기", "olympics", "미니게임 3종 누적 점수 대결.", 2, 7, 10, "new", "🥉"],
+  ["solo", "불주먹 개인전", "olympics", "랜덤 미니게임 누적 점수.", 2, 7, 15, "new", "🏃"],
+  ["team", "불주먹 팀전", "olympics", "팀별 합산 점수 대결.", 4, 7, 15, "new", "🚩"],
+  ["survivor", "최후의 생존자", "olympics", "라운드마다 꼴찌 탈락.", 3, 7, 15, "new", "🔥"],
+  ["cup", "두목배 챔피언십", "olympics", "두목이 여는 공식 대회.", 2, 7, 30, "new", "🏆"]
 ];
 const REG = GAME_ROWS.map(function (g, i) {
   return { id: g[0], name: g[1], cat: g[2], desc: g[3], min: g[4], max: g[5], mins: g[6], status: g[7], icon: g[8], lead: !!g[9], order: i };
@@ -2382,7 +2382,7 @@ function durOf(r) {
     if (r.status === "v") return FAST ? Math.max(3, Math.round((PARTY[r.type].vSec || 20) / FAST)) : (PARTY[r.type].vSec || 20);
     if (r.status !== "q") return undefined;
     if (r.type === "hotbomb" && r.q) return FAST ? Math.max(3, Math.round(r.q.fuse / FAST)) : r.q.fuse;
-    const s = r.type === "tensec" ? (r.target || 10) + 25 : PARTY[r.type].qSec;
+    const s = r.q && r.q.sec ? r.q.sec : r.type === "tensec" ? (r.target || 10) + 25 : PARTY[r.type].qSec;
     return FAST ? Math.max(3, Math.round(s / FAST)) : s;
   }
   if (r && (r.type || "liar") === "liar" && r.status === "result") return (r.setNo || 1) < (r.setTotal || 1) ? (FAST ? Math.max(2, Math.round(12 / FAST)) : 12) : undefined;
@@ -4551,8 +4551,814 @@ const MINI_KEYS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRi
   });
 });
 
+
+/* ================= 전략본부 · 두뇌싸움(턴제) ================= */
+/* turn games keep their whole state in r.q; an action runs fn(r, q, meId) inside a transaction and returns
+   { q } to save, { q, end: true } to finish the round (def.resolve reads r.q), or null to ignore */
+async function turnAct(fn, auto, expectPhase) {
+  const me = meMember();
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const r = snap.data();
+      if (!r || r.status !== "q" || !PARTY[r.type] || !PARTY[r.type].turn) return;
+      if (expectPhase != null && r.phase !== expectPhase) return;
+      const q = JSON.parse(JSON.stringify(r.q)), res = fn(r, q, auto ? null : (me && me.id));
+      if (!res) return;
+      if (res.msg) sysMsg(tx, r, res.msg);
+      if (res.end) { pResolveTx(tx, Object.assign({}, r, { q: res.q })); tx.update(roomRef(), { q: res.q }); return; }
+      tx.update(roomRef(), nextPhase(r, { q: res.q }));
+    });
+  } catch (e) { toast(errText(e)); }
+}
+function whoseTurn(q) { return q.order[q.turn % q.order.length]; }
+function twoPlayers(r) { return (r.lineup || []).slice(0, 2); }
+/* ---------- board helpers ---------- */
+function lineWin(get, W, H, need) {
+  const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = get(x, y); if (!v) continue;
+    for (const d of dirs) { let k = 1; while (k < need && get(x + d[0] * k, y + d[1] * k) === v) k++; if (k >= need) return v; } }
+  return null;
+}
+function boardGame(o) {
+  return {
+    rounds: 3, qSec: o.turnSec, turn: true, input: "board", rules: o.rules,
+    makeQ: function (r) {
+      const p = twoPlayers(r), first = (r.rn || 1) % 2 ? p : [p[1], p[0]];
+      return { key: o.id + r.rn, text: nickOf(first[0]) + "(" + o.marks[0] + ") vs " + nickOf(first[1]) + "(" + o.marks[1] + ")", order: first, turn: 0, cells: ".".repeat(o.W * o.H), last: -1 };
+    },
+    act: function (r, q, me, i) {
+      const who = whoseTurn(q); if (me && me !== who) return null;
+      if (i == null) { const free = []; for (let k = 0; k < q.cells.length; k++) if (q.cells[k] === "." && o.legal(q, k)) free.push(k); free.sort(function (a, b) { return Math.abs(a - q.last) - Math.abs(b - q.last); }); i = free[Math.floor(Math.random() * Math.min(4, free.length))]; }
+      if (i == null) return null;
+      i = o.drop ? o.drop(q, i) : i; if (i == null || i < 0 || q.cells[i] !== "." || !o.legal(q, i)) return null;
+      const mark = q.turn % 2 ? "W" : "B";
+      q.cells = q.cells.slice(0, i) + mark + q.cells.slice(i + 1); q.last = i; q.turn++;
+      const win = lineWin(function (x, y) { return x < 0 || y < 0 || x >= o.W || y >= o.H ? null : (q.cells[y * o.W + x] === "." ? null : q.cells[y * o.W + x]); }, o.W, o.H, o.need);
+      if (win) { q.winner = win === "B" ? q.order[0] : q.order[1]; return { q: q, end: true }; }
+      if (q.cells.indexOf(".") < 0) { q.winner = null; return { q: q, end: true }; }
+      return { q: q };
+    },
+    resolve: function (r) { const pts = {}; if (r.q.winner) pts[r.q.winner] = 100; return { pts: pts, info: { winner: r.q.winner || null } }; },
+    round: function (x) { return [h("p", { class: "pr-big ok", text: x.info.winner ? "🏆 " + nickOf(x.info.winner) + " 승리!" : "무승부" }), boardView(x.q, o, false)]; },
+    view: o
+  };
+}
+function boardView(q, o, playable) {
+  const me = meMember(), myTurn = playable && me && whoseTurn(q) === me.id;
+  const g = h("div", { class: "board " + o.cls }); g.style.gridTemplateColumns = "repeat(" + o.W + ", 1fr)";
+  for (let k = 0; k < o.W * o.H; k++) {
+    const v = q.cells[k];
+    g.appendChild(h("button", { type: "button", class: "cell" + (v === "B" ? " b" : v === "W" ? " w" : "") + (k === q.last ? " last" : ""), disabled: !myTurn || v !== ".", onclick: function () { sfx("click"); turnAct(function (r, qq, m) { return PARTY[r.type].act(r, qq, m, k); }); } }));
+  }
+  return g;
+}
+const COLS = "ABCDEFGHIJKLMNO";
+Object.assign(PARTY, {
+  omok: boardGame({ id: "omok", W: 13, H: 13, need: 5, turnSec: 30, marks: ["⚫", "⚪"], cls: "omok", legal: function () { return true; },
+    rules: ["2명이 흑·백을 번갈아 놓아요. 가로·세로·대각선으로 5개를 먼저 이으면 승리.", "한 수에 30초. 시간이 지나면 아무 데나 자동으로 둬요.", "3판을 하고, 판마다 흑백이 바뀌어요. 이기면 +100.", "3명 이상이 들어오면 앞의 2명이 두고 나머지는 관전해요."] }),
+  connect4: boardGame({ id: "connect4", W: 7, H: 6, need: 4, turnSec: 20, marks: ["🔴", "🟡"], cls: "c4",
+    legal: function () { return true; },
+    drop: function (q, i) { const x = i % 7; for (let y = 5; y >= 0; y--) if (q.cells[y * 7 + x] === ".") return y * 7 + x; return null; },
+    rules: ["칸을 누르면 그 줄 맨 아래로 떨어져요. 4개를 먼저 이으면 승리.", "한 수에 20초. 3판, 판마다 선공이 바뀌어요. 이기면 +100."] }),
+  battleship: {
+    rounds: 3, qSec: 25, turn: true, input: "battleship",
+    rules: ["각자 8×8 바다에 함대(4·3·3·2칸)가 무작위로 배치돼요.", "번갈아 상대 바다를 쏴요. 맞히면 한 번 더! 25초 안에 안 쏘면 자동 발사.", "상대 함대를 먼저 모두 격침하면 +100. 3판."],
+    makeQ: function (r) {
+      const p = twoPlayers(r), first = (r.rn || 1) % 2 ? p : [p[1], p[0]], fleets = {};
+      first.forEach(function (m) { fleets[m] = placeFleet(); });
+      return { key: "bs" + r.rn, text: nickOf(first[0]) + " vs " + nickOf(first[1]), order: first, turn: 0, fleets: fleets, shots: { a: "", b: "" } };
+    },
+    act: function (r, q, me, i) {
+      const who = whoseTurn(q); if (me && me !== who) return null;
+      const side = q.turn % 2 ? "b" : "a", foe = q.order[q.turn % 2 ? 0 : 1], shots = q.shots[side].split(",").filter(Boolean).map(Number);
+      if (i == null) { const free = []; for (let k = 0; k < 64; k++) if (shots.indexOf(k) < 0) free.push(k); i = free[Math.floor(Math.random() * free.length)]; }
+      if (shots.indexOf(i) >= 0) return null;
+      shots.push(i); q.shots[side] = shots.join(",");
+      const hit = q.fleets[foe].indexOf(i) >= 0;
+      if (q.fleets[foe].every(function (c) { return shots.indexOf(c) >= 0; })) { q.winner = who; return { q: q, end: true }; }
+      if (!hit) q.turn++;
+      return { q: q };
+    },
+    resolve: function (r) { const pts = {}; if (r.q.winner) pts[r.q.winner] = 100; return { pts: pts, info: { winner: r.q.winner } }; },
+    round: function (x) { return [h("p", { class: "pr-big ok", text: "🚢 " + nickOf(x.info.winner) + " 함대 승리!" })]; }
+  },
+  numtile: {
+    rounds: 3, qSec: 40, turn: true, input: "numtile",
+    rules: ["0~11 숫자 타일(검정·흰색)을 받아 작은 수부터 늘어놓아요. 같은 숫자는 검정이 앞.", "내 차례: 타일 1장을 뽑고, 상대의 가려진 타일 하나를 골라 숫자를 추리해요.", "맞히면 그 타일이 공개되고 계속 추리하거나 멈출 수 있어요. 틀리면 내가 뽑은 타일이 공개돼요.", "타일이 모두 공개되면 탈락. 마지막까지 남으면 +100, 먼저 탈락한 순서로 점수가 적어요."],
+    makeQ: function (r) {
+      const pile = shuffled(Array.from({ length: 24 }).map(function (_, i) { return i; }));   /* tile id: num*2 + (white?1:0) */
+      const players = r.lineup.slice(0, 4), per = players.length > 3 ? 3 : 4, hands = {};
+      players.forEach(function (m) { hands[m] = pile.splice(0, per).sort(function (a, b) { return a - b; }).map(function (t) { return { t: t, open: false }; }); });
+      return { key: "nt" + r.rn, text: "상대 타일의 숫자를 추리하라!", order: shuffled(players), turn: 0, hands: hands, pile: pile, drawn: null, streak: 0, out: [] };
+    },
+    act: function (r, q, me, a) {
+      const who = whoseTurn(q); if (me && me !== who) return null;
+      if (q.drawn == null && q.pile.length) q.drawn = q.pile.shift();
+      if (!a) a = ntAuto(q, who);
+      if (a.stop) { if (q.drawn != null) ntInsert(q, who, q.drawn, false); q.drawn = null; q.streak = 0; return ntNext(q); }
+      const tile = q.hands[a.m] && q.hands[a.m][a.i]; if (!tile || tile.open || a.m === who) return null;
+      if (Math.floor(tile.t / 2) === a.n) {
+        tile.open = true; q.streak++;
+        const msg = "🎯 " + nickOf(who) + " → " + nickOf(a.m) + "의 " + a.n + " 적중!";
+        if (q.hands[a.m].every(function (x) { return x.open; })) { q.out.push(a.m); }
+        const alive = q.order.filter(function (m) { return q.out.indexOf(m) < 0; });
+        if (alive.length <= 1) { q.winner = alive[0]; return { q: q, end: true, msg: msg }; }
+        return { q: q, msg: msg };
+      }
+      const msg2 = "❌ " + nickOf(who) + "가 " + nickOf(a.m) + "의 타일을 " + a.n + "(으)로 추리했지만 틀림";
+      if (q.drawn != null) ntInsert(q, who, q.drawn, true); q.drawn = null; q.streak = 0;
+      if (q.hands[who].every(function (x) { return x.open; })) q.out.push(who);
+      const alive = q.order.filter(function (m) { return q.out.indexOf(m) < 0; });
+      if (alive.length <= 1) { q.winner = alive[0]; return { q: q, end: true, msg: msg2 }; }
+      const nx = ntNext(q); nx.msg = msg2; return nx;
+    },
+    resolve: function (r) {
+      const pts = {}, q = r.q; if (q.winner) pts[q.winner] = 100;
+      q.out.slice().reverse().forEach(function (m, i) { pts[m] = Math.max(10, 60 - i * 20); });
+      return { pts: pts, info: { winner: q.winner } };
+    },
+    round: function (x) { return [h("p", { class: "pr-big ok", text: "🔢 " + nickOf(x.info.winner) + " 최후의 생존!" })]; }
+  },
+  yacht: {
+    rounds: 12, fixedRounds: true, qSec: 50, input: "yacht",
+    rules: ["12라운드 동안 모두 동시에 자기 주사위를 굴려요. 한 라운드에 최대 3번 굴리고, 남길 주사위를 눌러 고정해요.", "내 점수표에서 아직 안 쓴 칸 하나를 골라 점수를 적어요. 0점이라도 칸은 꼭 채워야 해요.", "1~6 칸 합이 63 이상이면 보너스 +35. 야추(5개 같은 눈)는 50점!"],
+    makeQ: function (r) { return { key: "y" + r.rn, text: (r.rn || 1) + " / 12 라운드 · 굴리고 칸을 골라요", seed: Math.floor(Math.random() * 2147483647) }; },
+    resolve: function (r) {
+      const subs = r.subs || {}, ext = JSON.parse(JSON.stringify(r.ext || {})), pts = {}; ext.card = ext.card || {};
+      r.lineup.forEach(function (m) {
+        const card = ext.card[m] = ext.card[m] || {}, v = subs[m];
+        let cat = v && YACHT_CATS.some(function (c) { return c.id === v.cat; }) && card[v.cat] == null ? v.cat : null, val = cat ? Math.max(0, Math.min(50, +v.val || 0)) : 0;
+        if (!cat) { cat = YACHT_CATS.find(function (c) { return card[c.id] == null; }).id; val = 0; }
+        card[cat] = val; pts[m] = val;
+        if ((r.rn || 1) >= 12) { const up = ["n1", "n2", "n3", "n4", "n5", "n6"].reduce(function (a, k) { return a + (card[k] || 0); }, 0); if (up >= 63) pts[m] += 35; }
+      });
+      return { pts: pts, info: {}, ext: ext };
+    },
+    round: function (x, r) {
+      const subs = x.subs || {};
+      return [h("ul", { class: "pr-list" }, (r.lineup || []).map(function (m) { const v = subs[m]; const c = v && YACHT_CATS.find(function (k) { return k.id === v.cat; }); return h("li", { class: x.pts[m] >= 25 ? "win" : "" }, h("span", { text: nickOf(m) + " · " + (c ? c.name : "자동 0점") + (v && v.dice ? " [" + v.dice.join("") + "]" : "") }), h("b", { text: "+" + (x.pts[m] || 0) })); }))];
+    }
+  },
+  baseball: {
+    rounds: 3, qSec: 100, input: "baseball",
+    rules: ["0~9로 만든 서로 다른 4자리 비밀 숫자를 맞혀요(모두 같은 숫자).", "숫자와 자리가 맞으면 스트라이크(S), 숫자만 맞으면 볼(B).", "10번 안에 맞혀야 해요. 적은 시도 → 빠른 시간 순으로 순위."],
+    makeQ: function (r) { const d = shuffled([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).slice(0, 4).join(""); return { key: "bb" + r.rn, text: "비밀 숫자 4자리를 맞혀라", secret: d }; },
+    resolve: function (r) {
+      const subs = r.subs || {}, ok = r.lineup.filter(function (m) { return subs[m] && subs[m].ok; }).map(function (m) { return { m: m, v: subs[m].tries * 1e6 + subs[m].ms }; });
+      return { pts: rankPoints(ok, function (a, b) { return a.v - b.v; }), info: {} };
+    },
+    round: function (x, r) {
+      const subs = x.subs || {};
+      return [h("p", { class: "pr-big ok", text: "비밀 숫자: " + x.q.secret }), h("ul", { class: "pr-list" }, (r.lineup || []).map(function (m) { const v = subs[m]; return h("li", { class: x.pts[m] === 100 ? "win" : "" }, h("span", { text: nickOf(m) + " · " + (v ? (v.ok ? v.tries + "번 · " + (v.ms / 1000).toFixed(1) + "초" : "실패") : "미제출") }), h("b", { text: "+" + (x.pts[m] || 0) })); }))];
+    }
+  },
+  auction: {
+    rounds: 5, qSec: 25, input: "number",
+    rules: ["모두 1,000코인으로 시작해요. 라운드마다 물건과 그 가치(점수)가 공개돼요.", "몰래 입찰! 가장 많이 쓴 사람이 물건을 가져가고 쓴 만큼 코인이 줄어요(같으면 먼저 낸 사람).", "얻은 물건 점수 합 + 마지막에 남은 코인의 20%가 최종 점수."],
+    makeQ: function (r) {
+      const items = [["불주먹 금장 반지", 400], ["두목의 낡은 의자", 120], ["조직 비밀 장부", 300], ["한정판 피규어", 250], ["녹슨 열쇠", 60], ["황금 붕어빵", 220], ["수상한 서류가방", 180], ["전설의 주먹 장갑", 350]];
+      const it = freshFrom(items, r, function (x) { return x[0]; });
+      return { key: it[0], text: "🔨 " + it[0] + " · 가치 " + it[1] + "점", value: it[1], max: 1000, unit: "코인" };
+    },
+    extra: function (r) { const me = meMember(), b = ((r.ext || {}).budget || {}), mine = me ? (b[me.id] == null ? 1000 : b[me.id]) : null; return h("div", { class: "auc" }, mine != null ? h("p", { class: "pr-big", text: "💰 내 남은 코인 " + mine }) : null, h("p", { class: "note", text: (r.lineup || []).map(function (m) { return nickOf(m) + " " + (b[m] == null ? 1000 : b[m]); }).join(" · ") }), h("p", { class: "hint", text: "남은 코인보다 많이 적으면 남은 만큼만 입찰돼요. 0 = 패스" })); },
+    resolve: function (r) {
+      const subs = r.subs || {}, subT = r.subT || {}, ext = JSON.parse(JSON.stringify(r.ext || {})), pts = {}; ext.budget = ext.budget || {};
+      r.lineup.forEach(function (m) { if (ext.budget[m] == null) ext.budget[m] = 1000; });
+      const bids = r.lineup.filter(function (m) { return typeof subs[m] === "number" && subs[m] > 0; }).map(function (m) { return { m: m, v: Math.min(subs[m], ext.budget[m]) }; });
+      bids.sort(function (a, b) { return b.v - a.v || (subT[a.m] || 1e9) - (subT[b.m] || 1e9); });
+      const win = bids[0] || null;
+      if (win) { ext.budget[win.m] -= win.v; pts[win.m] = r.q.value; }
+      if ((r.rn || 1) >= (r.total || 1)) r.lineup.forEach(function (m) { pts[m] = (pts[m] || 0) + Math.round(ext.budget[m] * 0.2); });
+      return { pts: pts, info: { win: win, bids: bids }, ext: ext };
+    },
+    round: function (x, r) {
+      const i = x.info, b = (r.ext || {}).budget || {};
+      return [h("p", { class: "pr-big ok", text: i.win ? "낙찰! " + nickOf(i.win.m) + " · " + i.win.v + "코인" : "아무도 입찰하지 않았어요" }),
+        h("ul", { class: "pr-list" }, (r.lineup || []).map(function (m) { const bb = i.bids.find(function (z) { return z.m === m; }); return h("li", { class: i.win && i.win.m === m ? "win" : "" }, h("span", { text: nickOf(m) + " · 입찰 " + (bb ? bb.v : 0) }), h("b", { text: "남은 코인 " + (b[m] == null ? 1000 : b[m]) })); }))];
+    }
+  },
+  territory: {
+    rounds: 12, fixedRounds: true, qSec: 15, input: "territory",
+    rules: ["격자 지도에서 각자 시작 땅 1칸을 받아요.", "매 라운드 모두 동시에, 내 땅과 맞닿은 빈칸 하나를 골라요. 여러 명이 같은 칸을 고르면 아무도 못 가져요!", "12라운드 뒤 땅이 가장 넓은 사람이 승리. 새로 얻은 칸마다 +10, 마지막에 땅 1칸당 +10."],
+    makeQ: function (r) {
+      const W = r.lineup.length > 4 ? 10 : 8, prev = (r.ext || {}).map;
+      let map = prev;
+      if (!map) { const cells = ".".repeat(W * W).split(""), starts = shuffled([[0, 0], [W - 1, W - 1], [0, W - 1], [W - 1, 0], [Math.floor(W / 2), 0], [Math.floor(W / 2), W - 1], [0, Math.floor(W / 2)]]); r.lineup.forEach(function (m, i) { const s0 = starts[i]; cells[s0[1] * W + s0[0]] = String(i); }); map = cells.join(""); }
+      return { key: "t" + r.rn, text: (r.rn || 1) + " / 12 · 땅을 넓혀라", W: W, map: map };
+    },
+    resolve: function (r) {
+      const subs = r.subs || {}, W = r.q.W, map = r.q.map.split(""), pts = {}, ext = JSON.parse(JSON.stringify(r.ext || {})), want = {};
+      r.lineup.forEach(function (m, i) { const c = subs[m]; if (typeof c === "number" && map[c] === "." && terrAdj(r.q.map, W, c, i)) (want[c] = want[c] || []).push(i); });
+      Object.keys(want).forEach(function (c) { if (want[c].length === 1) { map[c] = String(want[c][0]); pts[r.lineup[want[c][0]]] = 10; } });
+      ext.map = map.join("");
+      if ((r.rn || 1) >= 12) r.lineup.forEach(function (m, i) { pts[m] = (pts[m] || 0) + ext.map.split("").filter(function (x) { return x === String(i); }).length * 10; });
+      return { pts: pts, info: { clash: Object.keys(want).filter(function (c) { return want[c].length > 1; }).length }, ext: ext };
+    },
+    round: function (x, r) { return [h("p", { class: "note", text: x.info.clash ? "💥 같은 칸을 노린 충돌 " + x.info.clash + "건 — 아무도 못 가져갔어요" : "충돌 없이 확장!" }), terrView(Object.assign({}, x.q, { map: (r.ext || {}).map || x.q.map }), r, false)]; }
+  },
+  onecard: {
+    rounds: 3, qSec: 20, turn: true, input: "onecard",
+    rules: ["같은 무늬나 같은 숫자 카드를 내요. 낼 게 없으면 1장 먹기. 20초가 지나면 자동으로 먹어요.", "공격: 2(+2장), A(+3장), ♠A(+5장), 조커(+7장). 공격을 받으면 더 센 공격 카드로 막거나 다 먹어요.", "J 다음 사람 건너뛰기, Q 방향 바꾸기, K 한 번 더, 7 무늬 바꾸기. 15장 넘게 들면 파산!", "가장 먼저 다 내면 +100, 나머지는 남은 장수가 적을수록 점수."],
+    makeQ: function (r) {
+      const deck = [];
+      ["♠", "♥", "♦", "♣"].forEach(function (s0) { ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"].forEach(function (k) { deck.push(k + s0); }); });
+      deck.push("JK1", "JK2");
+      const d = shuffled(deck), hands = {}, per = r.lineup.length > 5 ? 5 : 7;
+      r.lineup.forEach(function (m) { hands[m] = d.splice(0, per); });
+      let top = d.shift(); while (/^(JK|2|A|7|J|Q|K)/.test(top)) { d.push(top); top = d.shift(); }
+      return { key: "oc" + r.rn, text: "원카드!", order: shuffled(r.lineup), turn: 0, dir: 1, hands: hands, deck: d, pile: [top], suit: top.slice(-1), attack: 0, out: [] };
+    },
+    act: function (r, q, me, card) {
+      const who = whoseTurn(q); if (me && me !== who) return null;
+      const hand = q.hands[who];
+      if (card === undefined) card = null;   /* time out → draw */
+      if (card && card.c) { const s7 = card.s; card = card.c; q.pendSuit = s7; }
+      if (card == null) {   /* draw */
+        const n = q.attack || 1; for (let i = 0; i < n; i++) { if (!q.deck.length) ocRefill(q); if (q.deck.length) hand.push(q.deck.shift()); }
+        q.attack = 0;
+        if (hand.length > 15) { q.out.push(who); q.hands[who] = []; }
+        return ocAdvance(q, 1);
+      }
+      if (hand.indexOf(card) < 0 || !ocCan(q, card)) return null;
+      hand.splice(hand.indexOf(card), 1); q.pile.push(card); if (q.pile.length > 6) q.pile = q.pile.slice(-6);
+      const rank = ocRank(card);
+      q.suit = rank === "7" && q.pendSuit ? q.pendSuit : (rank === "JK" ? q.suit : card.slice(-1)); q.pendSuit = null;
+      q.attack += ocPower(card);
+      if (!hand.length) { q.winner = who; return { q: q, end: true }; }
+      if (rank === "K") return { q: q };
+      if (rank === "Q") { q.dir = -q.dir; return ocAdvance(q, 1); }
+      if (rank === "J") return ocAdvance(q, 2);
+      return ocAdvance(q, 1);
+    },
+    resolve: function (r) {
+      const q = r.q, pts = {};
+      r.lineup.forEach(function (m) { if (m === q.winner) pts[m] = 100; else if (q.out.indexOf(m) < 0) pts[m] = Math.max(0, 50 - (q.hands[m] || []).length * 5); });
+      return { pts: pts, info: { winner: q.winner } };
+    },
+    round: function (x, r) { return [h("p", { class: "pr-big ok", text: "🂡 " + (x.info.winner ? nickOf(x.info.winner) + " 원카드 승리!" : "끝") }), h("ul", { class: "pr-list" }, (r.lineup || []).map(function (m) { return h("li", null, h("span", { text: nickOf(m) + " · " + (x.q.out.indexOf(m) >= 0 ? "파산" : (x.q.hands[m] || []).length + "장 남음") }), h("b", { text: "+" + (x.pts[m] || 0) })); }))]; }
+  },
+  bluffdice: {
+    rounds: 3, qSec: 25, turn: true, input: "bluff",
+    rules: ["각자 주사위 3개를 몰래 굴려요(내 것만 보여요).", "차례대로 ‘전체 주사위 중 ○눈이 최소 ○개 있다’고 선언해요. 다음 사람은 더 높게 선언하거나 ‘거짓말!’을 외쳐요.", "확인해서 틀린 쪽이 주사위 1개를 잃어요. 다 잃으면 탈락(관전). 마지막 생존자 +100.", "더 높은 선언 = 개수가 더 많거나, 같은 개수에 더 큰 눈. 25초 안에 안 하면 자동으로 ‘거짓말!’"],
+    makeQ: function (r) { const dice = {}; r.lineup.forEach(function (m) { dice[m] = rollDice(3); }); return { key: "bd" + r.rn, text: "블러핑 주사위", order: shuffled(r.lineup), turn: 0, dice: dice, bid: null, out: [], log: "" }; },
+    act: function (r, q, me, a) {
+      const who = whoseTurn(q); if (me && me !== who) return null;
+      if (!a) a = q.bid ? { call: true } : { qty: 1, face: 2 };
+      if (a.call && q.bid) {
+        let cnt = 0; Object.keys(q.dice).forEach(function (m) { cnt += q.dice[m].filter(function (v) { return v === q.bid.face; }).length; });
+        const loser = cnt >= q.bid.qty ? who : q.bid.by;
+        q.log = nickOf(who) + "의 거짓말! 콜 → 실제 " + q.bid.face + "눈 " + cnt + "개 (선언 " + q.bid.qty + "개) → " + nickOf(loser) + " 주사위 -1";
+        q.dice[loser] = q.dice[loser].slice(1);
+        if (!q.dice[loser].length) q.out.push(loser);
+        const alive = q.order.filter(function (m) { return q.out.indexOf(m) < 0; });
+        if (alive.length <= 1) { q.winner = alive[0]; return { q: q, end: true, msg: "🎲 " + q.log }; }
+        alive.forEach(function (m) { q.dice[m] = rollDice(q.dice[m].length); });
+        q.bid = null; q.turn = q.order.indexOf(q.out.indexOf(loser) >= 0 ? alive[0] : loser);
+        return { q: q, msg: "🎲 " + q.log };
+      }
+      const qty = Math.max(1, Math.round(a.qty)), face = Math.max(1, Math.min(6, Math.round(a.face)));
+      if (q.bid && !(qty > q.bid.qty || (qty === q.bid.qty && face > q.bid.face))) return null;
+      q.bid = { qty: qty, face: face, by: who };
+      do { q.turn++; } while (q.out.indexOf(whoseTurn(q)) >= 0);
+      return { q: q };
+    },
+    resolve: function (r) { const q = r.q, pts = {}; if (q.winner) pts[q.winner] = 100; q.out.slice().reverse().forEach(function (m, i) { pts[m] = Math.max(10, 60 - i * 20); }); return { pts: pts, info: { winner: q.winner } }; },
+    round: function (x) { return [h("p", { class: "pr-big ok", text: "🎲 " + nickOf(x.info.winner) + " 최후의 허세왕!" }), h("p", { class: "note", text: x.q.log })]; }
+  },
+  taboo: {
+    rounds: 3, qSec: 90, input: "taboo",
+    rules: ["각자 금지어를 받아요. 남의 금지어는 보이는데 내 것은 안 보여요!", "대화창에서 수다를 떨며 상대가 자기 금지어를 말하게 유도해요.", "내가 내 금지어를 입력하면 걸려요(-40점, 새 금지어 받음). 라운드마다 100점에서 시작.", "90초 × 3라운드."],
+    makeQ: function (r) { const words = {}, bank = shuffled(TABOO_WORDS); r.lineup.forEach(function (m, i) { words[m] = bank[i]; }); return { key: "tb" + r.rn, text: "상대가 금지어를 말하게 만들어라!", words: words, used: bank.slice(0, r.lineup.length) }; },
+    resolve: function (r) { const c = ((r.ext || {}).catch || {})[r.rn] || {}, pts = {}; r.lineup.forEach(function (m) { pts[m] = Math.max(0, 100 - 40 * (c[m] || 0)); }); return { pts: pts, info: { c: c, words: r.q.words } }; },
+    round: function (x, r) { return [h("ul", { class: "pr-list" }, (r.lineup || []).map(function (m) { return h("li", { class: x.info.c[m] ? "" : "win" }, h("span", { text: nickOf(m) + " · 마지막 금지어 ‘" + x.info.words[m] + "’" }), h("b", { text: (x.info.c[m] || 0) + "번 걸림 · +" + (x.pts[m] || 0) })); }))]; }
+  }
+});
+const TABOO_WORDS = ["진짜", "아니", "근데", "ㅋㅋ", "게임", "그래", "대박", "오늘", "아까", "뭐야", "좋아", "그냥", "완전", "두목", "배고파", "졸려", "어제", "내일", "헐", "제발", "너무", "빨리", "잠깐", "몰라", "맞아", "우리", "다시", "한판", "이거", "저거"];
+const YACHT_CATS = [
+  { id: "n1", name: "1 모음", f: function (d) { return d.filter(function (x) { return x === 1; }).length; } },
+  { id: "n2", name: "2 모음", f: function (d) { return d.filter(function (x) { return x === 2; }).length * 2; } },
+  { id: "n3", name: "3 모음", f: function (d) { return d.filter(function (x) { return x === 3; }).length * 3; } },
+  { id: "n4", name: "4 모음", f: function (d) { return d.filter(function (x) { return x === 4; }).length * 4; } },
+  { id: "n5", name: "5 모음", f: function (d) { return d.filter(function (x) { return x === 5; }).length * 5; } },
+  { id: "n6", name: "6 모음", f: function (d) { return d.filter(function (x) { return x === 6; }).length * 6; } },
+  { id: "ch", name: "초이스", f: function (d) { return d.reduce(function (a, b) { return a + b; }, 0); } },
+  { id: "fk", name: "포카드", f: function (d) { const c = diceCount(d); return Object.keys(c).some(function (k) { return c[k] >= 4; }) ? d.reduce(function (a, b) { return a + b; }, 0) : 0; } },
+  { id: "fh", name: "풀하우스", f: function (d) { const v = Object.values(diceCount(d)).sort(); return (v.join() === "2,3" || v.join() === "5") ? d.reduce(function (a, b) { return a + b; }, 0) : 0; } },
+  { id: "ss", name: "스몰 스트레이트", f: function (d) { const s = new Set(d); return [[1, 2, 3, 4], [2, 3, 4, 5], [3, 4, 5, 6]].some(function (q) { return q.every(function (x) { return s.has(x); }); }) ? 15 : 0; } },
+  { id: "ls", name: "라지 스트레이트", f: function (d) { const s = d.slice().sort().join(""); return s === "12345" || s === "23456" ? 30 : 0; } },
+  { id: "ya", name: "야추", f: function (d) { return new Set(d).size === 1 ? 50 : 0; } }
+];
+function diceCount(d) { const c = {}; d.forEach(function (x) { c[x] = (c[x] || 0) + 1; }); return c; }
+function rollDice(n) { const a = []; for (let i = 0; i < n; i++) a.push(1 + Math.floor(Math.random() * 6)); return a; }
+const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+function placeFleet() {
+  const taken = []; [4, 3, 3, 2].forEach(function (len) {
+    for (let tries = 0; tries < 200; tries++) { const hz = Math.random() < 0.5, x = Math.floor(Math.random() * (hz ? 9 - len : 8)), y = Math.floor(Math.random() * (hz ? 8 : 9 - len)), cells = [];
+      for (let k = 0; k < len; k++) cells.push((y + (hz ? 0 : k)) * 8 + x + (hz ? k : 0));
+      if (cells.every(function (c) { return taken.indexOf(c) < 0; })) { cells.forEach(function (c) { taken.push(c); }); break; } }
+  });
+  return taken;
+}
+function terrAdj(map, W, c, i) { const x = c % W, y = Math.floor(c / W), t = String(i); return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(function (d) { const nx = x + d[0], ny = y + d[1]; return nx >= 0 && ny >= 0 && nx < W && ny < W && map[ny * W + nx] === t; }); }
+const TERR_COL = ["#d2382f", "#2f6fd2", "#e2a21b", "#2f9e57", "#8a4fc9", "#ff7eb6", "#6ec6f0"];
+function terrView(q, r, playable) {
+  const me = meMember(), mi = me ? r.lineup.indexOf(me.id) : -1, mine = me ? (r.subs || {})[me.id] : null;
+  const g = h("div", { class: "board terr" }); g.style.gridTemplateColumns = "repeat(" + q.W + ", 1fr)";
+  q.map.split("").forEach(function (v, c) {
+    const can = playable && mi >= 0 && v === "." && terrAdj(q.map, q.W, c, mi);
+    const b = h("button", { type: "button", class: "cell" + (can ? " can" : "") + (mine === c ? " pick" : ""), disabled: !can, onclick: function () { sfx("click"); pSubmit(c); } });
+    if (v !== ".") b.style.background = TERR_COL[+v % 7];
+    g.appendChild(b);
+  });
+  return h("div", null, g, h("div", { class: "terr-legend" }, r.lineup.map(function (m, i) { const n = q.map.split("").filter(function (x) { return x === String(i); }).length; const s0 = h("span", { text: nickOf(m) + " " + n }); s0.style.borderColor = TERR_COL[i % 7]; return s0; })));
+}
+/* ---- one card ---- */
+function ocRank(c) { return c.slice(0, 2) === "JK" ? "JK" : c.slice(0, -1); }
+function ocPower(c) { const k = ocRank(c); return k === "JK" ? 7 : c === "A♠" ? 5 : k === "A" ? 3 : k === "2" ? 2 : 0; }
+function ocCan(q, c) {
+  const top = q.pile[q.pile.length - 1], k = ocRank(c);
+  if (q.attack) return ocPower(c) >= Math.min(ocPower(top) || 2, 7) && ocPower(c) > 0;
+  if (k === "JK") return true;
+  return c.slice(-1) === q.suit || (ocRank(top) !== "JK" && k === ocRank(top));
+}
+function ocRefill(q) { const keep = q.pile.pop(); q.deck = shuffled(q.pile.concat(q.deck)); q.pile = [keep]; }
+function ocAdvance(q, steps) {
+  const alive = q.order.filter(function (m) { return q.out.indexOf(m) < 0; });
+  if (alive.length <= 1) { q.winner = alive[0]; return { q: q, end: true }; }
+  for (let s = 0; s < steps; s++) { do { q.turn = (q.turn + q.dir + q.order.length * 4) % q.order.length; } while (q.out.indexOf(whoseTurn(q)) >= 0); }
+  return { q: q };
+}
+function cardEl(c, onClick, disabled) {
+  const red = /[♥♦]/.test(c) || c === "JK2";
+  return h("button", { type: "button", class: "card-ui" + (red ? " red" : ""), disabled: !!disabled, onclick: onClick, text: c === "JK1" ? "🃏흑" : c === "JK2" ? "🃏컬" : c });
+}
+/* ---- da vinci tiles ---- */
+function ntInsert(q, m, t, open) { q.hands[m].push({ t: t, open: open }); q.hands[m].sort(function (a, b) { return a.t - b.t; }); }
+function ntNext(q) { do { q.turn = (q.turn + 1) % q.order.length; } while (q.out.indexOf(whoseTurn(q)) >= 0); return { q: q }; }
+function ntAuto(q, who) {
+  if (q.streak) return { stop: true };
+  const opts = []; q.order.forEach(function (m) { if (m !== who && q.out.indexOf(m) < 0) q.hands[m].forEach(function (x, i) { if (!x.open) opts.push({ m: m, i: i }); }); });
+  const o = opts[Math.floor(Math.random() * opts.length)]; return { m: o.m, i: o.i, n: Math.floor(Math.random() * 12) };
+}
+function tileEl(x, mine, onClick, sel) {
+  const white = x.t % 2 === 1, show = x.open || mine;
+  return h("button", { type: "button", class: "tile-ui" + (white ? " w" : " b") + (x.open ? " open" : "") + (sel ? " sel" : ""), disabled: !onClick, onclick: onClick, text: show ? String(Math.floor(x.t / 2)) : "?" });
+}
+/* ---------- panels ---------- */
+function turnBanner(q) { const me = meMember(), who = whoseTurn(q); return h("p", { class: "pr-big" + (me && me.id === who ? " ok" : ""), text: me && me.id === who ? "내 차례!" : nickOf(who) + "님 차례…" }); }
+function boardPanel(r) { const d = PARTY[r.type]; return h("div", { class: "bg-wrap" }, turnBanner(r.q), boardView(r.q, d.view, true)); }
+function battleshipPanel(r) {
+  const me = meMember(), q = r.q, who = whoseTurn(q), myTurn = me && who === me.id, p = q.order;
+  function sea(owner, shotsKey, clickable, revealShips) {
+    const shots = q.shots[shotsKey].split(",").filter(Boolean).map(Number), fleet = q.fleets[owner], g = h("div", { class: "board sea" }); g.style.gridTemplateColumns = "repeat(8, 1fr)";
+    for (let k = 0; k < 64; k++) { const shot = shots.indexOf(k) >= 0, hit = shot && fleet.indexOf(k) >= 0, ship = revealShips && fleet.indexOf(k) >= 0;
+      g.appendChild(h("button", { type: "button", class: "cell" + (hit ? " hit" : shot ? " miss" : ship ? " ship" : ""), disabled: !clickable || shot, onclick: function () { sfx("click"); turnAct(function (rr, qq, m) { return PARTY.battleship.act(rr, qq, m, k); }); }, text: hit ? "💥" : shot ? "·" : "" })); }
+    return g;
+  }
+  const meIdx = me ? p.indexOf(me.id) : -1, foeIdx = meIdx === 0 ? 1 : 0;
+  return h("div", { class: "bs-wrap" }, turnBanner(q),
+    h("div", { class: "field-label", text: meIdx >= 0 ? "상대 바다 (쏘기)" : nickOf(p[1]) + "의 바다" }), sea(p[meIdx >= 0 ? foeIdx : 1], meIdx >= 0 ? (meIdx === 0 ? "a" : "b") : "a", myTurn, false),
+    meIdx >= 0 ? h("div", { class: "field-label", text: "내 바다" }) : h("div", { class: "field-label", text: nickOf(p[0]) + "의 바다" }), sea(p[meIdx >= 0 ? meIdx : 0], meIdx >= 0 ? (meIdx === 0 ? "b" : "a") : "b", false, meIdx >= 0));
+}
+function numtilePanel(r) {
+  const me = meMember(), q = r.q, who = whoseTurn(q), myTurn = me && who === me.id;
+  const rows = q.order.map(function (m) {
+    const mine = me && m === me.id;
+    return h("div", { class: "nt-row" + (q.out.indexOf(m) >= 0 ? " out" : "") }, h("b", { text: nickOf(m) + (m === who ? " 👉" : "") }),
+      h("div", { class: "nt-tiles" }, q.hands[m].map(function (x, i) {
+        const can = myTurn && !mine && !x.open && q.out.indexOf(m) < 0;
+        return tileEl(x, mine, can ? function () { S.ntSel = { m: m, i: i }; render(); } : null, S.ntSel && S.ntSel.m === m && S.ntSel.i === i);
+      })));
+  });
+  let ctl = null;
+  if (myTurn) {
+    const sel = S.ntSel && q.hands[S.ntSel.m] && q.hands[S.ntSel.m][S.ntSel.i] && !q.hands[S.ntSel.m][S.ntSel.i].open ? S.ntSel : null;
+    ctl = h("div", { class: "nt-ctl" },
+      h("p", { class: "hint", text: (q.drawn != null || q.pile.length ? "뽑은 타일: " + (q.drawn != null ? Math.floor(q.drawn / 2) + (q.drawn % 2 ? "(흰)" : "(검)") : "추리하면 자동으로 뽑아요") + " · " : "") + (sel ? nickOf(sel.m) + "의 " + (sel.i + 1) + "번째 타일은?" : "상대의 ? 타일을 눌러 고르세요") }),
+      sel ? h("div", { class: "nt-nums" }, Array.from({ length: 12 }).map(function (_, n) { return h("button", { type: "button", class: "px-btn", text: String(n), onclick: function () { const a = { m: sel.m, i: sel.i, n: n }; S.ntSel = null; turnAct(function (rr, qq, m) { return PARTY.numtile.act(rr, qq, m, a); }); } }); })) : null,
+      q.streak ? h("button", { type: "button", class: "px-btn", onclick: function () { turnAct(function (rr, qq, m) { return PARTY.numtile.act(rr, qq, m, { stop: true }); }); }, text: "✋ 여기서 멈추기" }) : null);
+  }
+  return h("div", { class: "nt" }, turnBanner(q), rows, ctl);
+}
+function onecardPanel(r) {
+  const me = meMember(), q = r.q, who = whoseTurn(q), myTurn = me && who === me.id, top = q.pile[q.pile.length - 1];
+  const others = h("div", { class: "oc-others" }, q.order.map(function (m) { return h("span", { class: m === who ? "now" : "" , text: nickOf(m) + " " + (q.out.indexOf(m) >= 0 ? "파산" : (q.hands[m] || []).length + "장") }); }));
+  const center = h("div", { class: "oc-center" }, cardEl(top, null, true), h("div", null, h("b", { text: "무늬 " + q.suit }), q.attack ? h("p", { class: "pr-big bad", text: "공격 +" + q.attack + "장!" }) : null, h("p", { class: "note", text: "방향 " + (q.dir > 0 ? "→" : "←") + " · 덱 " + q.deck.length })));
+  const hand = me && q.hands[me.id] ? q.hands[me.id] : null;
+  let mine = null;
+  if (hand) {
+    mine = h("div", { class: "oc-hand" }, hand.map(function (c) {
+      const ok = myTurn && ocCan(q, c);
+      return cardEl(c, ok ? function () {
+        if (ocRank(c) === "7") { S.oc7 = c; render(); return; }
+        sfx("click"); turnAct(function (rr, qq, m) { return PARTY.onecard.act(rr, qq, m, c); });
+      } : null, !ok);
+    }));
+  }
+  const suitPick = S.oc7 && myTurn ? h("div", { class: "oc-suits" }, h("span", { text: "7! 바꿀 무늬:" }), ["♠", "♥", "♦", "♣"].map(function (s0) { return h("button", { type: "button", class: "px-btn", text: s0, onclick: function () { const c = S.oc7; S.oc7 = null; turnAct(function (rr, qq, m) { return PARTY.onecard.act(rr, qq, m, { c: c, s: s0 }); }); } }); })) : null;
+  return h("div", { class: "oc" }, turnBanner(q), others, center, suitPick, mine,
+    myTurn ? h("button", { type: "button", class: "px-btn", onclick: function () { turnAct(function (rr, qq, m) { return PARTY.onecard.act(rr, qq, m, null); }); }, text: q.attack ? "공격 받기 (" + q.attack + "장 먹기)" : "카드 1장 먹기" }) : null);
+}
+function bluffPanel(r) {
+  const me = meMember(), q = r.q, who = whoseTurn(q), myTurn = me && who === me.id;
+  const myDice = me && q.dice[me.id] ? q.dice[me.id] : null, total = Object.keys(q.dice).reduce(function (a, m) { return a + q.dice[m].length; }, 0);
+  if (S.bdKey !== r.phase) { S.bdKey = r.phase; S.bdQty = q.bid ? q.bid.qty : 1; S.bdFace = q.bid ? Math.min(6, q.bid.face + 1) : 2; if (q.bid && q.bid.face >= 6) { S.bdQty = q.bid.qty + 1; S.bdFace = 1; } }
+  return h("div", { class: "bd" }, turnBanner(q),
+    h("p", { class: "pr-big", text: q.bid ? "현재 선언: " + DIE[q.bid.face] + " " + q.bid.face + "눈이 " + q.bid.qty + "개 이상 (" + nickOf(q.bid.by) + ")" : "첫 선언을 기다려요" }),
+    h("p", { class: "note", text: "전체 주사위 " + total + "개 · " + q.order.map(function (m) { return nickOf(m) + " " + q.dice[m].length; }).join(" · ") }),
+    q.log ? h("p", { class: "note", text: "직전: " + q.log }) : null,
+    myDice ? h("div", { class: "bd-dice" }, h("span", { text: "내 주사위" }), myDice.map(function (v) { return h("b", { text: DIE[v] }); })) : h("p", { class: "note", text: "탈락했어요. 관전 중" }),
+    myTurn ? h("div", { class: "bd-ctl" },
+      h("div", { class: "bd-row" }, h("span", { text: "개수" }), h("button", { type: "button", class: "px-btn", text: "−", onclick: function () { S.bdQty = Math.max(1, S.bdQty - 1); render(); } }), h("b", { text: String(S.bdQty) }), h("button", { type: "button", class: "px-btn", text: "+", onclick: function () { S.bdQty = Math.min(total, S.bdQty + 1); render(); } })),
+      h("div", { class: "bd-row" }, h("span", { text: "눈" }), [1, 2, 3, 4, 5, 6].map(function (f) { return h("button", { type: "button", class: "px-btn" + (S.bdFace === f ? " go-btn" : ""), text: DIE[f], onclick: function () { S.bdFace = f; render(); } }); })),
+      h("div", { class: "op-row" },
+        h("button", { type: "button", class: "go", onclick: function () { const a = { qty: S.bdQty, face: S.bdFace }; turnAct(function (rr, qq, m) { return PARTY.bluffdice.act(rr, qq, m, a); }); }, text: "선언: " + DIE[S.bdFace] + " " + S.bdQty + "개 이상" }),
+        q.bid ? h("button", { type: "button", class: "danger", onclick: function () { turnAct(function (rr, qq, m) { return PARTY.bluffdice.act(rr, qq, m, { call: true }); }); }, text: "거짓말! 🔍" }) : null)) : null);
+}
+function yachtPanel(r, me) {
+  const key = r.id + ":" + r.phase, q = r.q;
+  if (lpReset(key)) { const rnd = mulberry32((q.seed ^ hashStr(me.id)) >>> 0); LP.rnd = rnd; LP.dice = [0, 0, 0, 0, 0].map(function () { return 1 + Math.floor(rnd() * 6); }); LP.hold = [false, false, false, false, false]; LP.rolls = 1; }
+  if ((r.subs || {})[me.id] != null) return h("div", { class: "rf-pad done", text: "기록 완료! 결과를 기다려요" });
+  const card = (((r.ext || {}).card) || {})[me.id] || {};
+  return h("div", { class: "yacht" },
+    h("div", { class: "y-dice" }, LP.dice.map(function (v, i) { return h("button", { type: "button", class: "y-die" + (LP.hold[i] ? " hold" : ""), text: DIE[v], onclick: function () { LP.hold[i] = !LP.hold[i]; render(); } }); })),
+    h("button", { type: "button", class: "px-btn", disabled: LP.rolls >= 3, onclick: function () { LP.dice = LP.dice.map(function (v, i) { return LP.hold[i] ? v : 1 + Math.floor(LP.rnd() * 6); }); LP.rolls++; sfx("flip"); render(); }, text: "🎲 다시 굴리기 (" + (3 - LP.rolls) + "번 남음) · 누른 주사위는 고정" }),
+    h("div", { class: "y-card" }, YACHT_CATS.map(function (c) {
+      const used = card[c.id] != null, val = c.f(LP.dice);
+      return h("button", { type: "button", class: "y-cat" + (used ? " used" : ""), disabled: used, onclick: function () { if (LP.sent) return; LP.sent = true; sfx("ding"); pSubmit({ cat: c.id, val: val, dice: LP.dice.slice() }); } },
+        h("span", { text: c.name }), h("b", { text: used ? String(card[c.id]) : "+" + val }));
+    })));
+}
+function hashStr(s0) { let h0 = 2166136261; for (let i = 0; i < s0.length; i++) { h0 ^= s0.charCodeAt(i); h0 = Math.imul(h0, 16777619); } return h0 >>> 0; }
+function baseballPanel(r, me) {
+  const key = r.id + ":" + r.phase, q = r.q;
+  if (lpReset(key)) { LP.hist = []; LP.t0 = Date.now(); }
+  if ((r.subs || {})[me.id] != null) { const v = r.subs[me.id]; return h("div", { class: "rf-pad done", text: v.ok ? "⚾ 정답! " + v.tries + "번 만에 맞혔어요" : "10번 안에 못 맞혔어요" }); }
+  const inp = draft("input", "bb-in", { type: "text", class: "text-in", inputmode: "numeric", maxlength: "4", placeholder: "서로 다른 숫자 4개", autocomplete: "off" });
+  const f = h("form", { class: "send-row", novalidate: true }, inp, h("button", { type: "submit", class: "btn-sm go", text: "던지기" }));
+  f.addEventListener("submit", function (ev) {
+    ev.preventDefault(); const g = String(S.drafts["bb-in"] || inp.value || "").trim();
+    if (!/^\d{4}$/.test(g) || new Set(g).size !== 4) { toast("서로 다른 숫자 4개를 넣어요."); return; }
+    let st = 0, ba = 0; for (let i = 0; i < 4; i++) { if (g[i] === q.secret[i]) st++; else if (q.secret.indexOf(g[i]) >= 0) ba++; }
+    LP.hist.push({ g: g, s: st, b: ba }); S.drafts["bb-in"] = ""; sfx(st === 4 ? "correct" : "click");
+    if (st === 4 || LP.hist.length >= 10) { if (!LP.sent) { LP.sent = true; pSubmit({ ok: st === 4, tries: LP.hist.length, ms: Date.now() - LP.t0 }); } }
+    render();
+  });
+  return h("div", { class: "bb" }, f, h("ul", { class: "pr-list" }, LP.hist.slice().reverse().map(function (x, i) { return h("li", null, h("span", { text: (LP.hist.length - i) + ". " + x.g }), h("b", { text: x.s === 4 ? "⚾ 홈런!" : x.s + "S " + x.b + "B" + (x.s + x.b === 0 ? " (아웃)" : "") })); })), h("p", { class: "hint", text: "남은 기회 " + (10 - LP.hist.length) + "번" }));
+}
+function tabooPanel(r, me) {
+  const words = r.q.words;
+  return h("div", { class: "tb" }, h("p", { class: "note", text: "내 금지어는 비밀! 다른 사람의 금지어:" }),
+    h("ul", { class: "pr-list" }, (r.lineup || []).map(function (m) { return h("li", null, h("span", { text: nickOf(m) }), h("b", { text: me && m === me.id ? "???" : "‘" + words[m] + "’" })); })),
+    h("p", { class: "hint", text: "아래 대화창으로 수다를 떨어요. 상대가 자기 금지어를 말하게 유도하세요!" }));
+}
+/* taboo: check my own message against my secret word before sending */
+async function tabooCheck(text) {
+  const me = meMember(), r = S.room; if (!me || !r || r.type !== "taboo" || r.status !== "q") return false;
+  const w = r.q.words[me.id]; if (!w || normWord(text).indexOf(normWord(w)) < 0) return false;
+  try {
+    await runTransaction(db, async function (tx) {
+      const snap = await tx.get(roomRef()); const rr = snap.data(); if (!rr || rr.status !== "q") return;
+      const ext = JSON.parse(JSON.stringify(rr.ext || {})), q = JSON.parse(JSON.stringify(rr.q)); ext.catch = ext.catch || {}; const c = ext.catch[rr.rn] = ext.catch[rr.rn] || {};
+      c[me.id] = (c[me.id] || 0) + 1;
+      const fresh = TABOO_WORDS.filter(function (x) { return q.used.indexOf(x) < 0; }); const nw = fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : TABOO_WORDS[0];
+      q.words[me.id] = nw; q.used.push(nw);
+      sysMsg(tx, rr, "💥 " + me.nick + "님 금지어 ‘" + w + "’ 발언! (-40)");
+      tx.update(roomRef(), { ext: ext, q: q });
+    });
+    sfx("bang");
+  } catch (e) {}
+  return true;
+}
+
+
+/* ================= 미술관: 그림판 · 그림 저장 · 비교 ================= */
+const ART_INKS = ["#1b1b1d", "#d2382f", "#f07a1a", "#f4d35e", "#2f9e57", "#2f6fd2", "#6ec6f0", "#8a4fc9", "#ff7eb6", "#8b5a2b", "#f2c6a0", "#ffffff"];
+const ART_SIZES = [3, 7, 14, 26];
+const PAD = { key: null, el: null, cv: null, ctx: null, color: ART_INKS[0], size: 7, tool: "pen", undo: [], dirty: false, sent: false, last: null, timer: 0, locked: false };
+const ART_IMG = {};   /* live doc id → dataURL */
+function padFlood(ctx, x, y, hex) {
+  const W = 320, img = ctx.getImageData(0, 0, W, W), d = img.data, i0 = (Math.floor(y) * W + Math.floor(x)) * 4;
+  const tr = d[i0], tg = d[i0 + 1], tb = d[i0 + 2], c = parseInt(hex.slice(1), 16), nr = c >> 16 & 255, ng = c >> 8 & 255, nb = c & 255;
+  if (Math.abs(tr - nr) + Math.abs(tg - ng) + Math.abs(tb - nb) < 8) return;
+  const same = function (i) { return Math.abs(d[i] - tr) + Math.abs(d[i + 1] - tg) + Math.abs(d[i + 2] - tb) < 90; };
+  const st = [Math.floor(x), Math.floor(y)], seen = new Uint8Array(W * W);
+  while (st.length) {
+    const py = st.pop(), px = st.pop(); if (px < 0 || py < 0 || px >= W || py >= W) continue;
+    const k = py * W + px; if (seen[k]) continue; seen[k] = 1; const i = k * 4; if (!same(i)) continue;
+    d[i] = nr; d[i + 1] = ng; d[i + 2] = nb; d[i + 3] = 255;
+    st.push(px + 1, py, px - 1, py, px, py + 1, px, py - 1);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+/* one canvas per round (kept across re-renders so the drawing survives) */
+function drawPad(key, onSubmit, opt) {
+  opt = opt || {};
+  if (PAD.key !== key) {
+    clearTimeout(PAD.timer);
+    PAD.key = key; PAD.undo = []; PAD.dirty = false; PAD.sent = false; PAD.tool = "pen";
+    const cv = document.createElement("canvas"); cv.width = 320; cv.height = 320; cv.className = "art-cv";
+    const ctx = cv.getContext("2d"); ctx.fillStyle = PAPER; ctx.fillRect(0, 0, 320, 320); ctx.lineCap = "round"; ctx.lineJoin = "round";
+    PAD.cv = cv; PAD.ctx = ctx;
+    const xy = function (e) { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) / b.width * 320, (e.clientY - b.top) / b.height * 320]; };
+    const snap = function () { PAD.undo.push(ctx.getImageData(0, 0, 320, 320)); if (PAD.undo.length > 15) PAD.undo.shift(); };
+    cv.addEventListener("pointerdown", function (e) {
+      if (PAD.sent || PAD.locked) return; e.preventDefault(); const p = xy(e); snap(); PAD.dirty = true;
+      if (PAD.tool === "fill") { padFlood(ctx, p[0], p[1], PAD.color); return; }
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      SK.drawing = true; PAD.last = p;
+      ctx.strokeStyle = PAD.tool === "erase" ? PAPER : PAD.color; ctx.lineWidth = PAD.tool === "erase" ? PAD.size * 2 : PAD.size;
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + 0.01, p[1]); ctx.stroke();
+    });
+    cv.addEventListener("pointermove", function (e) {
+      if (!PAD.last) return; const p = xy(e);
+      ctx.beginPath(); ctx.moveTo(PAD.last[0], PAD.last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); PAD.last = p;
+    });
+    const up = function () { if (!PAD.last) return; PAD.last = null; SK.drawing = false; if (SK.pendingRender) { SK.pendingRender = false; render(); } };
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { cv.addEventListener(ev, up); });
+    PAD.el = h("div", { class: "art-pad" }, cv);
+    /* never lose a drawing: hand it in by itself just before the time runs out */
+    if (opt.endAt) { const ms = opt.endAt - Date.now() - 1500; PAD.timer = setTimeout(function () { if (PAD.key === key && !PAD.sent && PAD.dirty) padSubmit(onSubmit, true); }, Math.max(500, ms)); }
+  }
+  PAD.locked = !!opt.locked;
+  PAD.cv.classList.toggle("locked", PAD.locked);
+  if (PAD.sent) return h("div", { class: "art-done" }, h("img", { class: "art-img", src: PAD.cv.toDataURL("image/jpeg", 0.7), alt: "내 그림" }), h("p", { class: "hint", text: "제출 완료! 다른 사람을 기다려요" }));
+  const tools = h("div", { class: "art-tools" },
+    h("div", { class: "art-inks" }, ART_INKS.map(function (c) { const b = h("button", { type: "button", class: "ink" + (PAD.color === c && PAD.tool !== "erase" ? " on" : ""), "aria-label": c, onclick: function () { PAD.color = c; if (PAD.tool === "erase") PAD.tool = "pen"; render(); } }); b.style.background = c; return b; })),
+    h("div", { class: "art-row" },
+      ART_SIZES.map(function (s0) { return h("button", { type: "button", class: "px-btn sz" + (PAD.size === s0 ? " go-btn" : ""), onclick: function () { PAD.size = s0; render(); } }, h("i", { style: "width:" + Math.max(4, s0 / 1.6) + "px;height:" + Math.max(4, s0 / 1.6) + "px" })); }),
+      h("button", { type: "button", class: "px-btn" + (PAD.tool === "fill" ? " go-btn" : ""), text: "🪣", title: "채우기", onclick: function () { PAD.tool = PAD.tool === "fill" ? "pen" : "fill"; render(); } }),
+      h("button", { type: "button", class: "px-btn" + (PAD.tool === "erase" ? " go-btn" : ""), text: "🧽", title: "지우개", onclick: function () { PAD.tool = PAD.tool === "erase" ? "pen" : "erase"; render(); } }),
+      h("button", { type: "button", class: "px-btn", text: "↩", title: "되돌리기", onclick: function () { const u = PAD.undo.pop(); if (u) PAD.ctx.putImageData(u, 0, 0); } }),
+      h("button", { type: "button", class: "px-btn", text: "🗑", title: "전부 지우기", onclick: function () { PAD.undo.push(PAD.ctx.getImageData(0, 0, 320, 320)); PAD.ctx.fillStyle = PAPER; PAD.ctx.fillRect(0, 0, 320, 320); } })));
+  return h("div", { class: "art-wrap" }, PAD.el, opt.locked ? h("p", { class: "hint", text: opt.lockText || "잠깐 기다려요…" }) : tools,
+    opt.locked ? null : h("button", { type: "button", class: "save", onclick: function () { padSubmit(onSubmit); }, text: "🎨 그림 제출" }));
+}
+async function padSubmit(onSubmit, auto) {
+  if (PAD.sent) return;
+  if (!PAD.dirty) { if (!auto) toast("먼저 그림을 그려 주세요!"); return; } PAD.sent = true; clearTimeout(PAD.timer);
+  const me = meMember(), r = S.room; if (!me || !r) return;
+  const img = PAD.cv.toDataURL("image/jpeg", 0.7);
+  try {
+    const ref = await addDoc(collection(db, "rooms", S.roomId, "live"), { uid: myUid(), m: me.id, rk: "a:" + r.type + ":" + (r.game || 0) + ":" + (r.rn || 0), img: img, createdAt: serverTimestamp() });
+    ART_IMG[ref.id] = img; sfx("ding");
+    await onSubmit(ref.id, PAD.cv);
+  } catch (e) { PAD.sent = false; toast(errText(e)); }
+  render();
+}
+function artImg(id, cls) {
+  if (!id) return h("div", { class: "art-img empty " + (cls || ""), text: "(그림 없음)" });
+  if (ART_IMG[id] == null) {
+    ART_IMG[id] = "";
+    getDoc(doc(db, "rooms", S.roomId, "live", id)).then(function (snap) { ART_IMG[id] = snap.exists() ? snap.data().img : "x"; render(); }).catch(function () { ART_IMG[id] = "x"; });
+  }
+  const src = ART_IMG[id];
+  return src && src !== "x" ? h("img", { class: "art-img " + (cls || ""), src: src, alt: "그림" }) : h("div", { class: "art-img empty " + (cls || ""), text: src === "x" ? "(불러오기 실패)" : "불러오는 중…" });
+}
+/* ---------- reference pictures (same seed → same picture on every phone) ---------- */
+const REF_INKS = ["#d2382f", "#f07a1a", "#f4d35e", "#2f9e57", "#2f6fd2", "#8a4fc9", "#ff7eb6", "#1b1b1d", "#8b5a2b"];
+function refPaint(ctx, seed, n) {
+  const rnd = mulberry32(seed >>> 0), R = function (a, b) { return a + rnd() * (b - a); }, col = function () { return REF_INKS[Math.floor(rnd() * REF_INKS.length)]; };
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, 320, 320); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (let i = 0; i < n; i++) {
+    const kind = Math.floor(rnd() * 6), x = R(50, 270), y = R(50, 270), s0 = R(28, 70);
+    ctx.fillStyle = ctx.strokeStyle = col(); ctx.lineWidth = R(7, 14);
+    ctx.beginPath();
+    if (kind === 0) { ctx.arc(x, y, s0, 0, Math.PI * 2); ctx.fill(); }
+    else if (kind === 1) { ctx.rect(x - s0, y - s0 * 0.7, s0 * 2, s0 * 1.4); ctx.fill(); }
+    else if (kind === 2) { ctx.moveTo(x, y - s0); ctx.lineTo(x + s0, y + s0 * 0.8); ctx.lineTo(x - s0, y + s0 * 0.8); ctx.closePath(); ctx.fill(); }
+    else if (kind === 3) { ctx.moveTo(R(20, 300), R(20, 300)); ctx.lineTo(R(20, 300), R(20, 300)); ctx.stroke(); }
+    else if (kind === 4) { ctx.arc(x, y, s0, 0, Math.PI * 2); ctx.stroke(); }
+    else { ctx.moveTo(x - s0, y); for (let k = 1; k <= 4; k++) ctx.lineTo(x - s0 + k * s0 / 2, y + (k % 2 ? -s0 / 2 : s0 / 2)); ctx.stroke(); }
+  }
+}
+/* montage: a random cartoon suspect */
+function facePaint(ctx, seed) {
+  const rnd = mulberry32(seed >>> 0), pickR = function (a) { return a[Math.floor(rnd() * a.length)]; };
+  const skin = pickR(["#f2c6a0", "#e0a878", "#c68642", "#8d5524", "#ffdbac"]), hair = pickR(["#1b1b1d", "#8b5a2b", "#f4d35e", "#d2382f", "#7a7a7a", "#2f6fd2"]);
+  const shape = Math.floor(rnd() * 3), hairT = Math.floor(rnd() * 5), eyes = Math.floor(rnd() * 4), mouth = Math.floor(rnd() * 4);
+  const glasses = rnd() < 0.4, stache = rnd() < 0.35, mole = rnd() < 0.35, scar = rnd() < 0.25, ears = rnd() < 0.5, hat = rnd() < 0.25;
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, 320, 320); ctx.lineCap = "round"; ctx.lineWidth = 5; ctx.strokeStyle = "#1b1b1d";
+  const cx = 160, cy = 175, fw = shape === 1 ? 92 : 100, fh = shape === 1 ? 120 : 108;
+  if (hairT === 4) { ctx.fillStyle = hair; ctx.beginPath(); ctx.ellipse(cx, cy + 10, fw + 22, fh + 15, 0, 0, Math.PI * 2); ctx.fill(); }
+  if (ears) { ctx.fillStyle = skin; [-1, 1].forEach(function (s0) { ctx.beginPath(); ctx.ellipse(cx + s0 * fw, cy, 18, 26, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }); }
+  ctx.fillStyle = skin; ctx.beginPath();
+  if (shape === 2) ctx.rect(cx - fw, cy - fh, fw * 2, fh * 2); else ctx.ellipse(cx, cy, fw, fh, 0, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = hair;
+  if (hairT === 1 || hairT === 4) { ctx.beginPath(); ctx.ellipse(cx, cy - fh + 18, fw + 4, 42, 0, Math.PI, Math.PI * 2); ctx.fill(); }
+  if (hairT === 2) { ctx.beginPath(); for (let k = 0; k <= 8; k++) { const x = cx - fw + k * fw / 4; ctx.lineTo(x, cy - fh + (k % 2 ? -40 : 10)); } ctx.closePath(); ctx.fill(); }
+  if (hairT === 3) { ctx.beginPath(); ctx.arc(cx, cy - fh + 6, 26, 0, Math.PI * 2); ctx.fill(); }
+  if (hat) { ctx.fillStyle = pickR(["#d2382f", "#2f9e57", "#1b1b1d"]); ctx.fillRect(cx - fw - 16, cy - fh - 4, (fw + 16) * 2, 18); ctx.fillRect(cx - fw * 0.7, cy - fh - 70, fw * 1.4, 70); }
+  const ey = cy - 18;
+  [-1, 1].forEach(function (s0) {
+    const ex = cx + s0 * 38; ctx.fillStyle = "#1b1b1d"; ctx.beginPath();
+    if (eyes === 0) { ctx.arc(ex, ey, 7, 0, Math.PI * 2); ctx.fill(); }
+    else if (eyes === 1) { ctx.fillStyle = "#fff"; ctx.arc(ex, ey, 16, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1b1b1d"; ctx.beginPath(); ctx.arc(ex + 4, ey + 3, 6, 0, Math.PI * 2); ctx.fill(); }
+    else if (eyes === 2) { ctx.moveTo(ex - 14, ey); ctx.lineTo(ex + 14, ey); ctx.stroke(); }
+    else { ctx.arc(ex, ey + 4, 13, Math.PI, Math.PI * 2); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(ex - 16, ey - 24 + (eyes === 3 ? 6 : 0) * s0); ctx.lineTo(ex + 16, ey - 24 - (eyes === 3 ? 6 : 0) * s0); ctx.stroke();
+  });
+  if (glasses) { ctx.lineWidth = 4; [-1, 1].forEach(function (s0) { ctx.beginPath(); ctx.arc(cx + s0 * 38, ey, 22, 0, Math.PI * 2); ctx.stroke(); }); ctx.beginPath(); ctx.moveTo(cx - 16, ey); ctx.lineTo(cx + 16, ey); ctx.stroke(); ctx.lineWidth = 5; }
+  ctx.beginPath(); ctx.moveTo(cx, ey + 12); ctx.lineTo(cx - 10, cy + 30); ctx.lineTo(cx + 4, cy + 32); ctx.stroke();
+  const my = cy + 62; ctx.beginPath();
+  if (mouth === 0) { ctx.arc(cx, my - 18, 30, 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke(); }
+  else if (mouth === 1) { ctx.moveTo(cx - 26, my); ctx.lineTo(cx + 26, my); ctx.stroke(); }
+  else if (mouth === 2) { ctx.fillStyle = "#7a1d18"; ctx.ellipse(cx, my, 20, 14, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  else { ctx.arc(cx, my + 22, 28, 1.2 * Math.PI, 1.8 * Math.PI); ctx.stroke(); }
+  if (stache) { ctx.fillStyle = hair; ctx.beginPath(); ctx.ellipse(cx - 18, cy + 44, 20, 8, 0.2, 0, Math.PI * 2); ctx.ellipse(cx + 18, cy + 44, 20, 8, -0.2, 0, Math.PI * 2); ctx.fill(); }
+  if (mole) { ctx.fillStyle = "#3b2414"; ctx.beginPath(); ctx.arc(cx + 50, cy + 36, 5, 0, Math.PI * 2); ctx.fill(); }
+  if (scar) { ctx.strokeStyle = "#a33"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 62, cy - 4); ctx.lineTo(cx - 40, cy + 26); for (let k = 0; k < 3; k++) { ctx.moveTo(cx - 58 + k * 8, cy + 4 + k * 10); ctx.lineTo(cx - 46 + k * 8, cy + k * 10); } ctx.stroke(); }
+}
+function refCanvas(paint, cls) { const cv = document.createElement("canvas"); cv.width = 320; cv.height = 320; cv.className = "art-img " + (cls || ""); paint(cv.getContext("2d")); return cv; }
+/* how close is a drawing to the reference? compare coarse colour grids where either side has ink */
+function artSim(cv, paint) {
+  const ref = document.createElement("canvas"); ref.width = 320; ref.height = 320; paint(ref.getContext("2d"));
+  function grid(src, n) { const c = document.createElement("canvas"); c.width = n; c.height = n; const x = c.getContext("2d"); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; x.drawImage(src, 0, 0, n, n); return x.getImageData(0, 0, n, n).data; }
+  const P0 = [243, 241, 236];
+  function score(n) {
+    const a = grid(cv, n), b = grid(ref, n); let tot = 0, cnt = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      const ia = Math.hypot(a[i] - P0[0], a[i + 1] - P0[1], a[i + 2] - P0[2]) > 40, ib = Math.hypot(b[i] - P0[0], b[i + 1] - P0[1], b[i + 2] - P0[2]) > 40;
+      if (!ia && !ib) continue; cnt++;
+      tot += Math.max(0, 1 - Math.hypot(a[i] - b[i], a[i + 1] - b[i + 1], a[i + 2] - b[i + 2]) / 130);
+    }
+    return cnt ? tot / cnt : 0;
+  }
+  return Math.round((score(24) * 0.6 + score(10) * 0.4) * 1000) / 10;
+}
+function artRk(r) { return r.id + ":" + (r.game || 0) + ":" + (r.rn || 0) + ":" + r.type; }
+function padEnd(r) { return phaseEnd(r) || Date.now() + 60000; }
+/* ---------- the four art rooms ---------- */
+function copyDef(o) {
+  return {
+    rounds: 3, qSec: o.qSec, input: "art", rules: o.rules,
+    makeQ: function (r) { return { key: "art" + r.rn + Math.random(), text: o.text, seed: Math.floor(Math.random() * 2147483647), n: o.n0 + (r.rn || 1), show: o.show || 0 }; },
+    panel: function (r, me) {
+      const q = r.q, paint = function (c) { refPaint(c, q.seed, q.n); };
+      const showFor = o.show ? (FAST ? Math.max(2, Math.round(o.show / FAST)) : o.show) * 1000 : 0;
+      const since = r.phaseAt && r.phaseAt.toMillis ? Date.now() - r.phaseAt.toMillis() : 0, peek = o.show && since < showFor;
+      if (peek && !S.artPeekT) S.artPeekT = setTimeout(function () { S.artPeekT = 0; render(); }, showFor - since + 50);
+      const pad = drawPad(artRk(r), function (id, cv) { return pSubmit({ img: id, sim: artSim(cv, paint) }); }, { endAt: padEnd(r), locked: peek, lockText: "👀 잘 봐 두세요! 곧 사라져요" });
+      return h("div", { class: "art-duo" }, o.show ? (peek ? refCanvas(paint, "ref") : h("div", { class: "art-img empty ref", text: "🙈 그림은 사라졌어요. 기억으로!" })) : refCanvas(paint, "ref"), pad);
+    },
+    resolve: function (r) {
+      const subs = r.subs || {}, ok = r.lineup.filter(function (m) { return subs[m] && subs[m].img; }).map(function (m) { return { m: m, v: +subs[m].sim || 0 }; });
+      const pts = rankPoints(ok, function (a, b) { return b.v - a.v; });
+      ok.forEach(function (e) { if (e.v >= 80) pts[e.m] += 30; });
+      return { pts: pts, info: {} };
+    },
+    round: function (x, r) {
+      const subs = x.subs || {}, list = (r.lineup || []).filter(function (m) { return subs[m]; }).sort(function (a, b) { return (subs[b].sim || 0) - (subs[a].sim || 0); });
+      return [h("div", { class: "art-gal" }, h("figure", { class: "ref" }, refCanvas(function (c) { refPaint(c, x.q.seed, x.q.n); }), h("figcaption", { text: "원본" })),
+        list.map(function (m) { return h("figure", { class: x.pts[m] === 100 ? "win" : "" }, artImg(subs[m].img), h("figcaption", { text: nickOf(m) + " · 닮음 " + subs[m].sim + "% · +" + (x.pts[m] || 0) })); }))];
+    }
+  };
+}
+const TEL_START = ["두목이 몰래 라면을 끓이다 걸렸다", "고양이가 회의를 주최했다", "편의점 알바가 마법사였다", "버스에서 펭귄이 내린다", "외계인이 김장을 한다", "우디가 무대에서 탭댄스를 춘다", "냉장고 속에 작은 마을이 있다", "산타가 배달 오토바이를 탄다"];
+Object.assign(PARTY, {
+  copy: copyDef({ qSec: 60, n0: 2, text: "원본 그림을 최대한 똑같이 그려요!", rules: ["원본 그림을 보면서 60초 안에 똑같이 그려요. 색과 위치까지!", "제출하면 원본과 얼마나 닮았는지 자동으로 채점해요(닮음 %).", "닮은 순서대로 100·70·50… 점, 80% 이상이면 +30 보너스. 라운드마다 도형이 늘어나요."] }),
+  recall: copyDef({ qSec: 50, n0: 1, show: 5, text: "5초 동안 보고, 기억으로 그려요!", rules: ["원본 그림이 5초 동안만 보여요. 그동안은 그릴 수 없어요.", "사라진 뒤 기억만으로 똑같이 그려요. 색·위치·크기 모두 채점!", "닮은 순서대로 100·70·50… 점, 80% 이상이면 +30. 라운드마다 더 복잡해져요."] }),
+  montage: {
+    rounds: 3, qSec: 75, vSec: 20, input: "art", vote: true,
+    rules: ["매 라운드 한 명이 목격자! 목격자에게만 범인 얼굴이 보여요.", "목격자는 대화창으로 얼굴을 설명하고(그림은 못 그려요), 나머지는 몽타주를 그려요. 75초.", "목격자가 가장 닮은 몽타주를 골라요. 뽑힌 화가 +100, 목격자는 제출된 그림이 있으면 +40.", "마지막에 진짜 범인 얼굴과 나란히 공개!"],
+    makeQ: function (r) { const n = r.lineup.length, w = r.lineup[((r.rn || 1) - 1) % n]; return { key: "mt" + r.rn + Math.random(), text: "🕵️ 목격자 " + nickOf(w) + "의 설명을 듣고 범인을 그려라!", seed: Math.floor(Math.random() * 2147483647), witness: w }; },
+    canSubmit: function (r, m) { return m !== r.q.witness; },
+    restNote: function (r) { return h("div", { class: "art-duo" }, refCanvas(function (c) { facePaint(c, r.q.seed); }, "ref"), h("p", { class: "pr-big ok", text: "당신이 목격자! 아래 대화창으로 이 얼굴을 설명하세요. (눈·코·입·머리·특징…)" })); },
+    panel: function (r) { return drawPad(artRk(r), function (id) { return pSubmit(id); }, { endAt: padEnd(r) }); },
+    voters: function (r) { return [r.q.witness]; },
+    voteText: "범인과 가장 닮은 몽타주는?",
+    waitNote: function (r) { return "목격자 " + nickOf(r.q.witness) + "님이 가장 닮은 몽타주를 고르는 중… 🕵️"; },
+    cands: function (r) { const subs = r.subs || {}; return shuffled(r.lineup.filter(function (m) { return subs[m]; })).map(function (m, i) { return { id: "c" + i, img: subs[m], owner: m }; }); },
+    resolve: function (r) {
+      const v = (r.votes || {})[r.q.witness], c = (r.cands || []).find(function (x) { return x.id === v; }), pts = {};
+      if (c) pts[c.owner] = 100;
+      if ((r.cands || []).length) pts[r.q.witness] = 40;
+      return { pts: pts, info: { pick: c ? c.owner : null } };
+    },
+    round: function (x) {
+      return [h("div", { class: "art-gal" }, h("figure", { class: "ref" }, refCanvas(function (c) { facePaint(c, x.q.seed); }), h("figcaption", { text: "진짜 범인" })),
+        (x.cands || []).map(function (c) { return h("figure", { class: c.owner === x.info.pick ? "win" : "" }, artImg(c.img), h("figcaption", { text: nickOf(c.owner) + (c.owner === x.info.pick ? " · 🏆 목격자 선택" : "") })); }))];
+    }
+  },
+  telephone: {
+    rounds: 6, qSec: 50, input: "art", noScore: true, roundsFor: function (r) { return Math.max(3, Math.min(6, (r.players || r.lineup || []).length)); },
+    rules: ["1라운드: 각자 재밌는 문장을 써요.", "다음 라운드: 옆 사람 문장을 그림으로! 그다음: 옆 사람 그림을 보고 문장으로!", "바로 앞 것만 볼 수 있어요. 전달될수록 엉망진창… 마지막에 처음부터 끝까지 공개!", "라운드 수 = 참가 인원(최대 6)."],
+    makeQ: function (r) {
+      const n = r.lineup.length, k = (r.rn || 1) - 1, chains = (r.ext || {}).chains, give = {};
+      r.lineup.forEach(function (m, i) { const c = (i + k) % n; give[m] = { c: c, prev: chains ? chains[c].items[chains[c].items.length - 1] : null }; });
+      const draw = k % 2 === 1;
+      return { key: "tel" + r.rn, text: k === 0 ? "재밌는 문장을 하나 써요! (다음 사람이 그려요)" : draw ? "앞사람의 문장을 그림으로!" : "앞사람의 그림을 보고 문장으로!", give: give, input: draw ? "art" : "text", long: true, hint: pick(TEL_START) };
+    },
+    panel: function (r) { return drawPad(artRk(r), function (id) { return pSubmit(id); }, { endAt: padEnd(r) }); },
+    extra: function (r) {
+      const me = meMember(), g = me && r.q.give[me.id]; if (!g) return null;
+      if (!g.prev) return h("p", { class: "hint", text: "예시: " + r.q.hint });
+      return g.prev.k === "d" ? h("div", { class: "art-prev" }, h("p", { class: "field-label", text: "앞사람의 그림" }), artImg(g.prev.v)) : h("p", { class: "pr-quote", text: "“" + g.prev.v + "”" });
+    },
+    resolve: function (r) {
+      const ext = JSON.parse(JSON.stringify(r.ext || {})), subs = r.subs || {}, draw = r.q.input === "art";
+      if (!ext.chains) ext.chains = r.lineup.map(function () { return { items: [] }; });
+      r.lineup.forEach(function (m) { const g = r.q.give[m]; if (!g) return; const v = subs[m]; ext.chains[g.c].items.push(draw ? { k: "d", v: v || "", m: m } : { k: "t", v: v ? String(v) : "(…멍…)", m: m }); });
+      return { pts: {}, info: {}, ext: ext, hideSubs: true };
+    },
+    round: function () { return [h("p", { class: "note", text: "전달 중… 다음 사람에게 넘어가요 📨" })]; },
+    final: function (r) {
+      return h("div", { class: "tel" }, ((r.ext || {}).chains || []).map(function (c, i) {
+        return h("div", { class: "tel-chain" }, h("b", { text: "📨 전달 " + (i + 1) }), (c.items || []).map(function (it) {
+          return h("div", { class: "tel-it" }, h("small", { text: nickOf(it.m) }), it.k === "d" ? artImg(it.v) : h("p", { class: "pr-quote", text: "“" + it.v + "”" }));
+        }));
+      }));
+    }
+  }
+});
+
+
+/* ================= 불주먹 올림픽: 개인 기록 종목을 이어 붙이는 메타 게임 ================= */
+const OLY_EVENTS = ["reflex", "tensec", "typing", "memory", "mole", "fishing", "tiles", "worm", "racing", "zombie", "bomber", "sumo", "ox", "trivia", "chosung", "copy", "recall", "baseball"];
+function olyName(ev) { const g = REG_BY[ev]; return g ? g.icon + " " + g.name : ev; }
+function olyUsed(r) { return (r.hist || []).map(function (x) { return x.q && x.q.ev; }).filter(Boolean); }
+function olyPick(r, pool) { const used = olyUsed(r), fresh = pool.filter(function (e) { return used.indexOf(e) < 0; }); return pick(fresh.length ? fresh : pool); }
+function olyQ(r, ev, extra) {
+  const sub = PARTY[ev], q = sub.makeQ(r), sec = ev === "tensec" ? (q.target || 10) + 25 : sub.qSec;
+  return Object.assign(q, { ev: ev, input: q.input || sub.input, sec: sec, key: q.key || ev, text: "[" + olyName(ev) + "] " + (q.text || "") }, extra || {});
+}
+function olyRes(r) { const sub = PARTY[r.q.ev]; return sub.resolve(Object.assign({}, r, { type: r.q.ev })); }
+function olyRound(x, r) { const sub = PARTY[x.q.ev]; return [h("p", { class: "pr-big", text: olyName(x.q.ev) })].concat(sub.round(x, Object.assign({}, r, { type: x.q.ev })) || []); }
+function olyDef(o) {
+  return Object.assign({
+    rounds: 5, oly: true, input: "oly", qSec: 30,
+    makeQ: function (r) { return olyQ(r, olyPick(r, OLY_EVENTS)); },
+    resolve: function (r) { const res = olyRes(r); return { pts: res.pts, info: res.info || {} }; },
+    round: olyRound,
+    final: function (r) { return h("p", { class: "note", text: "종목: " + (r.hist || []).map(function (x) { return olyName(x.q.ev); }).join(" → ") }); }
+  }, o);
+}
+const TEAM_NAMES = [["🔥 불꽃팀", "#d2382f"], ["👊 주먹팀", "#2f6fd2"]];
+function teamOf(q, m) { return q.teams && q.teams.a.indexOf(m) >= 0 ? 0 : 1; }
+Object.assign(PARTY, {
+  pentathlon: olyDef({ rounds: 5, fixedRounds: true, rules: ["서로 다른 5종목을 연달아 겨뤄요(반응속도·타자·두더지·레이싱·퀴즈…).", "종목마다 순위대로 100·70·50… 점(퀴즈는 정답+속도 점수).", "5종목 누적 점수로 금·은·동!"] }),
+  triathlon: olyDef({ rounds: 3, fixedRounds: true, rules: ["서로 다른 3종목 누적 점수 대결.", "종목은 매번 무작위. 짧고 굵게!"] }),
+  solo: olyDef({ rounds: 5, rules: ["라운드마다 무작위 종목이 나와요(같은 종목은 잘 안 겹쳐요).", "라운드 수는 3·5·7 중 선택. 누적 점수로 우승."] }),
+  survivor: olyDef({
+    roundsFor: function (r) { return Math.max(2, (r.players || r.lineup || []).length - 1); },
+    rules: ["매 라운드 무작위 종목! 그 라운드 점수가 가장 낮은 사람이 탈락해요(동점이면 함께 탈락, 단 전원 탈락은 없음).", "탈락하면 관전. 마지막 생존자 +300.", "라운드 수 = 인원 − 1."],
+    canSubmit: function (r, m) { return ((r.ext || {}).out || []).indexOf(m) < 0; },
+    over: function (r) { const out = (r.ext || {}).out || []; return r.lineup.filter(function (m) { return out.indexOf(m) < 0; }).length <= 1; },
+    restNote: function () { return h("p", { class: "note", text: "💀 탈락했어요. 관전하며 응원해요!" }); },
+    resolve: function (r) {
+      const res = olyRes(r), ext = JSON.parse(JSON.stringify(r.ext || {})); ext.out = ext.out || [];
+      const alive = r.lineup.filter(function (m) { return ext.out.indexOf(m) < 0; }), pts = {};
+      alive.forEach(function (m) { pts[m] = res.pts[m] || 0; });
+      const low = Math.min.apply(null, alive.map(function (m) { return pts[m]; })), losers = alive.filter(function (m) { return pts[m] === low; });
+      const gone = losers.length < alive.length ? losers : [];
+      gone.forEach(function (m) { ext.out.push(m); });
+      const left = alive.filter(function (m) { return gone.indexOf(m) < 0; });
+      if (left.length === 1 || (r.rn || 1) >= (r.total || 1)) left.forEach(function (m) { pts[m] += 300; });
+      return { pts: pts, info: Object.assign({}, res.info || {}, { gone: gone, left: left }), ext: ext };
+    },
+    round: function (x, r) { return olyRound(x, r).concat([h("p", { class: "pr-big bad", text: x.info.gone.length ? "💀 탈락: " + x.info.gone.map(nickOf).join(", ") : "탈락 없음 (전원 동점)" }), h("p", { class: "note", text: "생존: " + x.info.left.map(nickOf).join(", ") })]); }
+  }),
+  team: olyDef({
+    rules: ["시작하면 두 팀으로 나눠요(🔥 불꽃팀 vs 👊 주먹팀).", "라운드마다 무작위 종목. 팀원 점수의 평균이 팀 점수 — 인원이 달라도 공평해요.", "팀 점수는 팀원 모두에게 똑같이 들어가요. 이긴 팀은 라운드마다 +50!"],
+    makeQ: function (r) {
+      let teams = (r.rn || 1) > 1 && r.q && r.q.teams;
+      if (!teams) { const sh = shuffled(r.lineup), half = Math.ceil(sh.length / 2); teams = { a: sh.slice(0, half), b: sh.slice(half) }; }
+      return olyQ(r, olyPick(r, OLY_EVENTS), { teams: teams });
+    },
+    resolve: function (r) {
+      const res = olyRes(r), t = r.q.teams, avg = function (L) { return Math.round(L.reduce(function (a, m) { return a + (res.pts[m] || 0); }, 0) / Math.max(1, L.length)); };
+      const A = avg(t.a), B = avg(t.b), pts = {};
+      t.a.forEach(function (m) { pts[m] = A + (A > B ? 50 : 0); }); t.b.forEach(function (m) { pts[m] = B + (B > A ? 50 : 0); });
+      return { pts: pts, info: Object.assign({}, res.info || {}, { A: A, B: B, raw: res.pts }) };
+    },
+    extra: function (r) { const t = r.q.teams; return h("p", { class: "note", text: TEAM_NAMES[0][0] + ": " + t.a.map(nickOf).join(", ") + "  vs  " + TEAM_NAMES[1][0] + ": " + t.b.map(nickOf).join(", ") }); },
+    round: function (x, r) { return olyRound(Object.assign({}, x, { pts: x.info.raw || x.pts }), r).concat([h("p", { class: "pr-big ok", text: TEAM_NAMES[0][0] + " " + x.info.A + " : " + x.info.B + " " + TEAM_NAMES[1][0] })]); },
+    final: function (r) {
+      const t = r.q.teams, sc = r.scores || {}, A = sc[t.a[0]] || 0, B = sc[t.b[0]] || 0;
+      return h("p", { class: "pr-big ok", text: A === B ? "무승부!" : "🏆 " + (A > B ? TEAM_NAMES[0][0] : TEAM_NAMES[1][0]) + " 승리! (" + A + " : " + B + ")" });
+    }
+  }),
+  cup: olyDef({
+    roundsFor: function (r) { return Math.max(1, (r.cupEvents || []).length || 5); },
+    rules: ["두목이 대회 종목과 순서를 정해요(대기실에서 선택, 안 고르면 무작위 5종목).", "모든 점수 2배! 우승자는 ‘두목배 챔피언’ 칭호를 받아요.", "정식 대회이니 진지하게…"],
+    makeQ: function (r) { const L = r.cupEvents || []; return olyQ(r, L.length ? L[((r.rn || 1) - 1) % L.length] : olyPick(r, OLY_EVENTS)); },
+    resolve: function (r) { const res = olyRes(r), pts = {}; Object.keys(res.pts).forEach(function (m) { pts[m] = res.pts[m] * 2; }); return { pts: pts, info: res.info || {} }; },
+    lobby: function (r) {
+      const L = r.cupEvents || [], boss = isBoss();
+      return h("div", { class: "field" }, h("div", { class: "field-label", text: "대회 종목 " + (L.length ? L.length + "개 (누른 순서대로 진행)" : "— 무작위 5종목") }),
+        h("div", { class: "chips" }, OLY_EVENTS.map(function (e) {
+          const i = L.indexOf(e);
+          return h("button", { type: "button", class: "chip", disabled: !boss, "aria-pressed": i >= 0 ? "true" : "false", onclick: function () { roomUpdate({ cupEvents: i >= 0 ? L.filter(function (x) { return x !== e; }) : L.concat([e]).slice(0, 10) }); }, text: (i >= 0 ? (i + 1) + ". " : "") + olyName(e) });
+        })),
+        boss ? null : h("p", { class: "hint", text: "종목은 두목만 정할 수 있어요." }));
+    },
+    final: function (r) { const sc = r.scores || {}, top = (r.lineup || []).slice().sort(function (a, b) { return (sc[b] || 0) - (sc[a] || 0); })[0]; return h("div", null, h("p", { class: "pr-big ok", text: "🏆 제1회 두목배 챔피언: " + nickOf(top) }), h("p", { class: "note", text: "종목: " + (r.hist || []).map(function (x) { return olyName(x.q.ev); }).join(" → ") })); }
+  })
+});
+
 function partyDef(r) { return r && PARTY[r.type]; }
-function partyRounds(r) { const d = PARTY[r.type]; return [3, 5, 7].indexOf(r.prounds) >= 0 ? r.prounds : d.rounds; }
+function partyRounds(r) { const d = PARTY[r.type]; if (d.roundsFor) return d.roundsFor(r); if (d.fixedRounds) return d.rounds; return [3, 5, 7].indexOf(r.prounds) >= 0 ? r.prounds : d.rounds; }
 async function pStart() {
   const r0 = S.room, d = partyDef(r0), g = REG_BY[r0.type];
   try {
@@ -4631,7 +5437,7 @@ async function pNext(expectPhase) {
   await runTransaction(db, async function (tx) {
     const snap = await tx.get(roomRef()); const r = snap.data();
     if (!r || r.status !== "rr" || (expectPhase != null && r.phase !== expectPhase)) return;
-    if ((r.rn || 1) >= (r.total || 1)) { sysMsg(tx, r, "🏁 게임 끝! 결과를 확인하세요."); tx.update(roomRef(), nextPhase(r, { status: "result" })); return; }
+    if ((r.rn || 1) >= (r.total || 1) || (PARTY[r.type].over && PARTY[r.type].over(r))) { sysMsg(tx, r, "🏁 게임 끝! 결과를 확인하세요."); tx.update(roomRef(), nextPhase(r, { status: "result" })); return; }
     const rn = (r.rn || 1) + 1, base = Object.assign({}, r, { rn: rn });
     tx.update(roomRef(), nextPhase(r, { status: "q", rn: rn, q: PARTY[r.type].makeQ(base), subs: {}, subT: {}, cands: null, votes: {} }));
   });
@@ -4654,6 +5460,7 @@ async function crocPick(i, auto, expectPhase) {
   });
 }
 function partyTimeout(r) {
+  if (r.status === "q" && PARTY[r.type].turn) return turnAct(function (rr, qq, m) { return PARTY[rr.type].act(rr, qq, m); }, true, r.phase);
   if (r.status === "q") return r.type === "croc" || r.type === "pirate" ? crocPick(null, true, r.phase) : pResolve(r.phase);
   if (r.status === "v") return pResolve(r.phase);
   if (r.status === "rr") return pNext(r.phase);
@@ -4768,8 +5575,8 @@ function screenPartyRoom(r) {
     body = h("div", { class: "panel" },
       h("div", { class: "field-label", text: "모인 사람 " + n + "명 · " + g.min + "~" + g.max + "명" }),
       h("div", { class: "chips" }, players.map(function (p) { return h("span", { class: "chip static" + (me && p === me.id ? " me" : ""), text: nickOf(p) + (p === r.createdBy ? " 👑" : "") }); })),
-      h("div", { class: "field-label", text: "라운드 수" }),
-      h("div", { class: "seg" }, [3, 5, 7].map(function (k) { return h("button", { type: "button", "aria-pressed": partyRounds(r) === k ? "true" : "false", onclick: function () { roomUpdate({ prounds: k }); } }, k + "라운드"); })),
+      d.fixedRounds || d.roundsFor ? null : h("div", { class: "field-label", text: "라운드 수" }),
+      d.fixedRounds || d.roundsFor ? null : h("div", { class: "seg" }, [3, 5, 7].map(function (k) { return h("button", { type: "button", "aria-pressed": partyRounds(r) === k ? "true" : "false", onclick: function () { roomUpdate({ prounds: k }); } }, k + "라운드"); })),
       r.type === "tensec" ? h("div", { class: "field-label", text: "목표 시간" }) : null,
       r.type === "tensec" ? h("div", { class: "seg" }, [5, 10, 15].map(function (k) { return h("button", { type: "button", "aria-pressed": (r.target || 10) === k ? "true" : "false", onclick: function () { roomUpdate({ target: k }); } }, k + "초"); })) : null,
       !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
@@ -4778,6 +5585,7 @@ function screenPartyRoom(r) {
             h("button", { type: "button", class: "go", disabled: !ok, onclick: pStart, text: ok ? "게임 시작" : n < g.min ? g.min + "명부터 시작" : "최대 " + g.max + "명" }))
           : h("button", { type: "button", class: "save", onclick: joinRoom, text: "이 방에 참가하기" }),
       d.canStart && d.canStart() ? h("p", { class: "msg err", text: d.canStart() }) : null,
+      d.lobby ? d.lobby(r) : null,
       d.editor && isBoss() ? d.editor() : null,
       h("details", { class: "guide" }, h("summary", { text: "규칙" }), h("div", { class: "guide-body" }, gameRules(g))));
   } else if (r.status === "result") {
@@ -4795,15 +5603,19 @@ function screenPartyRoom(r) {
     const stage = crewStage(lineup, saidMap(r, ["chat"]), function (p) {
       if ((r.type === "croc" || r.type === "pirate") && r.status === "q") { const who = q.order[q.turn % q.order.length]; if (p === who) return { cls: "now", badge: "👉" }; }
       if (r.type === "hotbomb" && r.status === "q" && q.holder === p) return { cls: "now", badge: "💣" };
+      if (d.turn && r.status === "q" && q.order) { if (q.out && q.out.indexOf(p) >= 0) return { sub: "탈락" }; if (whoseTurn(q) === p) return { cls: "now", badge: "👉" }; }
       if (r.status === "v" && (r.votes || {})[p] != null) return { cls: "ok", badge: "✓", badgeCls: "ok", sub: "투표" };
       if (r.status === "q" && subs[p] != null) return { cls: "ok", badge: "✓", badgeCls: "ok", sub: d.noScore ? "제출" : (r.scores || {})[p] ? (r.scores[p]).toLocaleString() + "점" : "제출" };
       return { sub: d.noScore ? null : ((r.scores || {})[p] || 0).toLocaleString() + "점" };
     });
     let panel;
     if (r.status === "q") {
+      const sd = q.ev && PARTY[q.ev] ? PARTY[q.ev] : d;
       const mine = me ? subs[me.id] : undefined, can = isPlayer && (!d.canSubmit || d.canSubmit(r, me.id)), IN = q.input || d.input;
       let input = null;
-      if (!isPlayer) input = h("p", { class: "note", text: "관전 중이에요." });
+      if (!isPlayer && d.turn) input = IN === "board" ? boardPanel(r) : IN === "battleship" ? battleshipPanel(r) : IN === "numtile" ? numtilePanel(r) : IN === "onecard" ? onecardPanel(r) : bluffPanel(r);
+      else if (!isPlayer) input = h("p", { class: "note", text: "관전 중이에요." });
+      else if (!can && d.restNote) input = d.restNote(r);
       else if (!can) input = h("p", { class: "note", text: r.type === "loyalty" ? "이번 라운드는 휴식이에요. ☕" : "이번엔 쉬어요." });
       else if (IN === "choice") input = h("div", { class: "pq-choices" }, q.opts.map(function (o, k) {
         return h("button", { type: "button", class: "pq-opt" + (mine === k ? " on" : ""), onclick: function () { sfx("click"); pSubmit(k); }, text: o });
@@ -4828,6 +5640,16 @@ function screenPartyRoom(r) {
       }));
       else if (IN === "memory") input = memoryPanel(r, me);
       else if (IN === "mini") input = miniPanel(r, me);
+      else if (IN === "art") input = mine != null && !(PAD.key === artRk(r) && PAD.sent) ? h("div", { class: "rf-pad done", text: "제출 완료! 다른 사람을 기다려요" }) : sd.panel(r, me);
+      else if (IN === "board") input = boardPanel(r);
+      else if (IN === "battleship") input = battleshipPanel(r);
+      else if (IN === "numtile") input = numtilePanel(r);
+      else if (IN === "onecard") input = onecardPanel(r);
+      else if (IN === "bluff") input = bluffPanel(r);
+      else if (IN === "yacht") input = yachtPanel(r, me);
+      else if (IN === "baseball") input = baseballPanel(r, me);
+      else if (IN === "territory") input = terrView(q, r, true);
+      else if (IN === "taboo") input = tabooPanel(r, me);
       else if (IN === "reflex") input = reflexPanel(r, me);
       else if (IN === "timer") input = timerPanel(r, me);
       else if (IN === "typing") input = typingPanel(r, me);
@@ -4842,28 +5664,30 @@ function screenPartyRoom(r) {
           h("p", { class: "pr-big" + (myTurn ? " ok" : ""), text: myTurn ? "내 차례! 이빨 하나를 눌러요" : nickOf(who) + "님 차례…" }));
       }
       panel = h("div", { class: "panel turn" + (r.type === "croc" ? "" : " pq") },
-        r.type === "hotbomb" ? h("p", { class: "pq-hint", text: "⏳ 언제 터질지는 아무도 몰라요…" }) : timerEl(r, r.type === "croc" || r.type === "pirate" ? "차례 남은 시간" : "남은 시간"),
+        r.type === "hotbomb" ? h("p", { class: "pq-hint", text: "⏳ 언제 터질지는 아무도 몰라요…" }) : timerEl(r, r.type === "croc" || r.type === "pirate" || d.turn ? "차례 남은 시간" : "남은 시간"),
         h("p", { class: "pq-text", text: q.text }),
         d.extra ? d.extra(r) : null,
-        r.type === "typing" && !(subs[me && me.id] != null) && LP.state === "type" ? h("p", { class: "type-src", text: q.text }) : null,
+        sd !== d && sd.extra ? sd.extra(r) : null,
+        (q.ev || r.type) === "typing" && !(subs[me && me.id] != null) && LP.state === "type" ? h("p", { class: "type-src", text: q.text }) : null,
         input,
-        r.type === "croc" || r.type === "pirate" || r.type === "hotbomb" || IN === "reflex" ? null : h("p", { class: "hint", text: "제출 " + doneN + " / " + expected.length + " · 다른 사람 선택은 결과 때 공개돼요" }));
+        r.type === "croc" || r.type === "pirate" || r.type === "hotbomb" || IN === "reflex" || d.turn || ["taboo", "yacht", "baseball", "territory"].indexOf(q.ev || r.type) >= 0 ? null : h("p", { class: "hint", text: "제출 " + doneN + " / " + expected.length + " · 다른 사람 선택은 결과 때 공개돼요" }));
     } else if (r.status === "v") {
       const cands = r.cands || [], myVote = me ? (r.votes || {})[me.id] : undefined, canVote = me && pVoters(r).indexOf(me.id) >= 0;
       const vdone = pVoters(r).filter(function (m) { return (r.votes || {})[m] != null; }).length;
       let vin;
-      if (!canVote) vin = h("p", { class: "note", text: isPlayer ? "이번엔 내 답이 문제예요. 다들 맞히는 중… 🤫" : "관전 중이에요." });
+      if (!canVote && d.waitNote) vin = h("p", { class: "note", text: d.waitNote(r) });
+      else if (!canVote) vin = h("p", { class: "note", text: isPlayer ? "이번엔 내 답이 문제예요. 다들 맞히는 중… 🤫" : "관전 중이에요." });
       else if (d.voteInput === "member") vin = h("div", { class: "chips pq-names" }, lineup.filter(function (m) { return m !== me.id; }).map(function (m) {
         return h("button", { type: "button", class: "chip", "aria-pressed": myVote === m ? "true" : "false", onclick: function () { sfx("click"); pVote(m); }, text: nickOf(m) });
       }));
       else vin = h("div", { class: "cand-list" }, cands.map(function (c) {
         const own = c.owner === me.id;
         return h("button", { type: "button", class: "cand" + (myVote === c.id ? " on" : ""), disabled: own, onclick: function () { sfx("click"); pVote(c.id); } },
-          r.type === "meme" ? memePic(q.who, c.text) : h("span", { text: c.text }), own ? h("small", { text: "내 답" }) : null);
+          r.type === "meme" ? memePic(q.who, c.text) : c.img ? artImg(c.img) : h("span", { text: c.text }), own ? h("small", { text: "내 답" }) : null);
       }));
       panel = h("div", { class: "panel turn pq" },
         timerEl(r, "투표 남은 시간"),
-        h("p", { class: "pq-text", text: d.voteInput === "member" ? "이 글은 누가 썼을까?" : "가장 마음에 드는 답에 투표!" }),
+        h("p", { class: "pq-text", text: d.voteText || (d.voteInput === "member" ? "이 글은 누가 썼을까?" : "가장 마음에 드는 답에 투표!") }),
         d.voteInput === "member" && cands[0] ? h("p", { class: "pr-quote", text: "“" + cands[0].text + "”" }) : h("p", { class: "pq-hint", text: q.text }),
         vin, h("p", { class: "hint", text: "투표 " + vdone + " / " + pVoters(r).length }));
     } else {
@@ -4874,7 +5698,7 @@ function screenPartyRoom(r) {
         x ? d.round(x, r) : null,
         d.noScore ? null : h("details", { class: "guide", open: true }, h("summary", { text: "누적 점수" }), h("div", { class: "guide-body" }, scoreBoard(r))));
     }
-    if (r.status === "q" && (q.input || d.input) === "mini") stage.classList.add("hide-m");
+    if (r.status === "q" && ["mini", "art", "board", "battleship", "numtile", "onecard", "yacht", "territory"].indexOf(q.input || d.input) >= 0) stage.classList.add("hide-m");
     body = [stage, panel];
   }
   return h("section", { class: "screen room" }, back, head, body, partyChat(r, me));
@@ -4891,9 +5715,9 @@ function partyChat(r, me) {
   f.addEventListener("submit", async function (ev) {
     ev.preventDefault(); const t = inp.value.trim(); if (!t || !S.user) return;
     S.drafts["chat-text"] = ""; inp.value = "";
-    try { await sendMsg("chat", t); render(); } catch (e) { toast(errText(e)); }
+    try { await sendMsg("chat", t); if (r.type === "taboo") await tabooCheck(t); render(); } catch (e) { toast(errText(e)); }
   });
-  const action = r.status === "q" && ((r.q && r.q.input) || (PARTY[r.type] || {}).input) === "mini";
+  const action = r.status === "q" && ["mini", "art"].indexOf((r.q && r.q.input) || (PARTY[r.type] || {}).input) >= 0 && !(r.type === "montage" || (r.type === "telephone" && r.q.input !== "art"));
   return h("div", { class: "field dock" + (r.type === "reflex" && r.status === "q" ? " slim" : "") + (action ? " slim drawer" : "") }, h("div", { class: "field-label", text: "대화" }), log, f);
 }
 
