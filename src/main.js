@@ -4679,7 +4679,7 @@ Object.assign(PARTY, {
     round: function (x, r) { return [h("ul", { class: "pr-list" }, (r.lineup || []).map(function (m) { return h("li", { class: x.info.c[m] ? "" : "win" }, h("span", { text: nickOf(m) + " · 마지막 금지어 ‘" + x.info.words[m] + "’" }), h("b", { text: (x.info.c[m] || 0) + "번 걸림 · +" + (x.pts[m] || 0) })); }))]; }
   }
 });
-const TABOO_WORDS = ["진짜", "아니", "근데", "ㅋㅋ", "게임", "그래", "대박", "오늘", "아까", "뭐야", "좋아", "그냥", "완전", "두목", "배고파", "졸려", "어제", "내일", "헐", "제발", "너무", "빨리", "잠깐", "몰라", "맞아", "우리", "다시", "한판", "이거", "저거"];
+const TABOO_WORDS = ["그니까", "마자", "맞아", "대박", "웅웅", "오키", "아웃겨", "개웃겨", "까비", "에라이", "와우", "오호", "근데", "아니", "진짜", "제발", "몰라", "그러게", "귀여워", "언니", "미쳤다", "오예", "우와", "나도", "일단", "그래도", "아까", "역시", "젠장", "호호", "킬킬", "어엉", "오오", "아하", "그치", "좋다", "빨리", "자꾸", "게임", "뽑기"];   /* 단톡방에서 다들 입에 달고 사는 말들 */
 const YACHT_CATS = [
   { id: "n1", name: "1 모음", f: function (d) { return d.filter(function (x) { return x === 1; }).length; } },
   { id: "n2", name: "2 모음", f: function (d) { return d.filter(function (x) { return x === 2; }).length * 2; } },
