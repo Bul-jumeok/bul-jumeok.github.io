@@ -2048,6 +2048,105 @@ function presencePanel() {
     PRES.denied ? h("p", { class: "hint", text: "접속 현황은 두목이 보안 규칙을 업데이트하면 보여요." }) : null);
 }
 
+/* ---------- 내가 들어가 있는 방 (게임센터에서 바로 나가기) ---------- */
+function myRooms() {
+  const me = meMember(); if (!me) return [];
+  return S.rooms.filter(function (r) { return roomAlive(r) && (r.players || []).indexOf(me.id) >= 0; });
+}
+function roomStateLabel(r) { return r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : "게임 중"; }
+async function leaveRoomById(r) {
+  const me = meMember(); if (!me) return;
+  const playing = r.status !== "lobby" && r.status !== "result" && r.status !== "closed";
+  if (playing && !window.confirm("게임이 진행 중인 방이에요. 정말 나갈까요?")) return;
+  const left = (r.players || []).filter(function (p) { return p !== me.id; });
+  try {
+    await updateDoc(doc(db, "rooms", r.id), left.length ? { players: arrayRemove(me.id) } : { players: arrayRemove(me.id), status: "closed" });
+    toast(GAME_NAME_OF(r.type) + " 방에서 나왔어요.");
+  } catch (e) { toast(errText(e)); }
+}
+function myRoomsPanel() {
+  const list = myRooms(); if (!list.length) return null;
+  return h("div", { class: "px-win my-rooms" },
+    h("div", { class: "px-bar" }, h("span", { text: "내가 들어가 있는 방" }), h("b", { text: list.length + "개" })),
+    h("ul", { class: "my-room-list" }, list.map(function (r) {
+      const g = REG_BY[r.type || "liar"];
+      return h("li", null,
+        h("span", { class: "mr-name" }, h("b", { text: (g ? g.icon + " " : "") + GAME_NAME_OF(r.type) }), h("small", { text: nickOf(r.createdBy) + "의 방 · " + (r.players || []).length + "명 · " + roomStateLabel(r) })),
+        h("button", { type: "button", class: "btn-sm", onclick: function () { go("room-" + r.id); }, text: "들어가기" }),
+        h("button", { type: "button", class: "btn-sm danger", onclick: function () { leaveRoomById(r); }, text: "🚪 나가기" }));
+    })));
+}
+/* ---------- 초대: 방 문서의 invites.<조직원> 에 기록, 받는 사람은 전체 방 목록 구독으로 알아챔 ---------- */
+const INVITE_MS = 10 * 60 * 1000;
+function inviteFresh(v) { return v && v.t && v.t.toMillis && Date.now() - (v.t.toMillis() - CLK.off) < INVITE_MS; }
+async function sendInvite(r, mid) {
+  const me = meMember(); if (!me) return;
+  try {
+    await updateDoc(doc(db, "rooms", r.id), { ["invites." + mid]: { by: me.id, t: serverTimestamp() } });
+    sfx("ding"); toast(nickOf(mid) + "님에게 초대를 보냈어요.");
+  } catch (e) { toast(errText(e)); }
+}
+function inviteButton(r) {
+  return h("button", { type: "button", class: "invite-btn", onclick: function () { S.inviteOpen = !S.inviteOpen; render(); }, text: "📨 초대" });
+}
+function inviteSheet(r) {
+  const me = meMember(); if (!me) return null;
+  watchPresence(true);
+  const inv = r.invites || {}, label = { on: "온라인", wait: "다른 방 대기 중", play: "게임 중", off: "오프라인" };
+  const others = S.members.filter(function (m) { return m.id !== me.id && (r.players || []).indexOf(m.id) < 0; })
+    .map(function (m) { return { m: m, p: presenceOf(m.id) }; })
+    .sort(function (a, b) { const w = { on: 0, wait: 1, play: 2, off: 3 }; return w[a.p.state] - w[b.p.state]; });
+  const close = function () { S.inviteOpen = false; render(); };
+  const sheet = h("div", { class: "inv-sheet", role: "dialog", "aria-label": "초대하기" },
+    h("div", { class: "inv-box px-win" },
+      h("div", { class: "px-bar" }, h("span", { text: "📨 이 방으로 초대하기" }), h("button", { type: "button", class: "inv-x", onclick: close, "aria-label": "닫기", text: "✕" })),
+      others.length ? h("ul", { class: "inv-list" }, others.map(function (x) {
+        const sent = inviteFresh(inv[x.m.id]);
+        return h("li", { class: x.p.state },
+          h("div", { class: "inv-ph" }, photoBox(x.m)),
+          h("span", { class: "inv-name" }, h("b", { text: x.m.nick }), h("small", { text: x.p.state === "play" && x.p.game ? GAME_NAME_OF(x.p.game) + " 중" : label[x.p.state] })),
+          h("button", { type: "button", class: "btn-sm" + (sent ? "" : " go"), onclick: function () { sendInvite(r, x.m.id); }, text: sent ? "다시 보내기" : "초대" }));
+      })) : h("p", { class: "note", text: "조직원이 모두 이 방에 있어요!" }),
+      h("p", { class: "hint", text: "초대받은 사람은 본부 어디에 있든 바로 알림이 떠요. 앱을 열어 두고 있어야 받을 수 있어요." })));
+  sheet.addEventListener("click", function (e) { if (e.target === sheet) close(); });
+  return sheet;
+}
+const INV = { dismissed: {}, sounded: {} };
+try { INV.dismissed = JSON.parse(localStorage.getItem("bf-inv-x") || "{}"); } catch (e) {}
+function pendingInvite() {
+  const me = meMember(); if (!me) return null;
+  const here = currentRoute().indexOf("room-") === 0 ? currentRoute().slice(5) : null;
+  let best = null;
+  S.rooms.forEach(function (r) {
+    const v = (r.invites || {})[me.id];
+    if (!inviteFresh(v) || r.id === here || r.status === "closed" || (r.players || []).indexOf(me.id) >= 0) return;
+    const key = r.id + ":" + v.t.toMillis();
+    if (INV.dismissed[key]) return;
+    if (!best || v.t.toMillis() > best.v.t.toMillis()) best = { r: r, v: v, key: key };
+  });
+  return best;
+}
+function dismissInvite(x) {
+  INV.dismissed[x.key] = 1;
+  try { localStorage.setItem("bf-inv-x", JSON.stringify(INV.dismissed)); } catch (e) {}
+}
+function inviteBanner() {
+  const x = pendingInvite(); if (!x) return null;
+  if (!INV.sounded[x.key]) { INV.sounded[x.key] = 1; sfx("ding"); }
+  const g = REG_BY[x.r.type || "liar"], me = meMember();
+  return h("div", { class: "inv-banner", role: "alert" },
+    h("span", { class: "inv-ico", text: "📨" }),
+    h("span", { class: "inv-txt" }, h("b", { text: nickOf(x.v.by) + "님의 초대" }), h("small", { text: (g ? g.icon + " " : "") + GAME_NAME_OF(x.r.type) + " 방 · " + (x.r.players || []).length + "명 · " + roomStateLabel(x.r) })),
+    h("button", { type: "button", class: "btn-sm go", onclick: async function () {
+      dismissInvite(x);
+      try { await updateDoc(doc(db, "rooms", x.r.id), { players: arrayUnion(me.id), ["invites." + me.id]: deleteField() }); } catch (e) { toast(errText(e)); return; }
+      go("room-" + x.r.id);
+    }, text: "입장" }),
+    h("button", { type: "button", class: "btn-sm", onclick: function () { dismissInvite(x); updateDoc(doc(db, "rooms", x.r.id), { ["invites." + me.id]: deleteField() }).catch(function () {}); render(); }, text: "다음에" }));
+}
+const invBar = h("div", { class: "inv-bar" });
+document.body.appendChild(invBar);
+
 /* ---------- 게임센터 메인 · 카테고리 화면 ---------- */
 function roomsOf(type) { return S.rooms.filter(function (r) { return roomAlive(r) && (r.type || "liar") === type; }); }
 function playingRoomsOf(type) { return roomsOf(type).filter(function (r) { return r.status !== "lobby" && r.status !== "result"; }).length; }
@@ -2059,6 +2158,7 @@ function screenGames() {
       h("div", { class: "gc-title" },
         logo("logo-l"),
         h("div", null, h("h1", { text: "불주먹 비밀본부" }), h("p", { class: "gc-en", text: "BULJUMEOK SECRET HEADQUARTERS" }), h("p", { class: "gc-motto", text: "불은 물로 끄면 되지만, 우린 못 꺼." })))),
+    myRoomsPanel(),
     presencePanel(),
     MT.state && MT.state.phase !== "revealed" || mtRevealDay() ? h("button", { type: "button", class: "px-win gc-event", onclick: function () { go("game-manito"); } },
       h("span", { class: "gc-event-ico", text: "🎄" }), h("span", null, h("b", { text: "EVENT · 크리스마스 마니또" }), h("small", { text: "몰래 챙기고 12월 25일 정체 공개" })), h("span", { class: "arr", text: "▶" })) : null,
@@ -6792,7 +6892,7 @@ function draw() {
   if (r.indexOf("room-") !== 0) { watchRoom(null); skWatch(null); smWatch(null); }
 
   if (r !== lastRoute) S.confirmDelete = false;
-  if (r !== "games" && r.indexOf("cat-") !== 0) watchPresence(false);
+  if (r !== "games" && r.indexOf("cat-") !== 0 && !(S.inviteOpen && r.indexOf("room-") === 0)) watchPresence(false);
   if (r !== lastRoute) setTimeout(function () { presenceBeat(true); }, 800);
 
   const gate = S.membersReady && needsGate();
@@ -6800,7 +6900,12 @@ function draw() {
   if (view.classList && view.classList.contains("room") && S.room) {
     const rh = view.querySelector(".room-head");
     if (rh && !rh.querySelector(".exit-btn")) rh.insertBefore(exitButton(S.room), rh.firstChild);
-  }
+    const me = meMember();
+    if (rh && me && (S.room.players || []).indexOf(me.id) >= 0 && S.room.status !== "closed") {
+      rh.insertBefore(inviteButton(S.room), rh.querySelector(".exit-btn"));
+      if (S.inviteOpen) view.appendChild(inviteSheet(S.room));
+    } else S.inviteOpen = false;
+  } else S.inviteOpen = false;
   if (view.classList && view.classList.contains("room")) {
     const dock = Array.prototype.find.call(view.children, function (c) { return c.classList.contains("dock"); });
     if (dock) {
@@ -6812,6 +6917,7 @@ function draw() {
   document.body.classList.toggle("wide-room", r.indexOf("room-") === 0);
   if (r !== lastRoute && view.classList) view.classList.add("enter");
   main.replaceChildren(view);
+  invBar.replaceChildren.apply(invBar, [inviteBanner()].filter(Boolean));
   cmtSweep();
   requestAnimationFrame(fitBubbles);
   bgmSet(bgmMoodFor());
