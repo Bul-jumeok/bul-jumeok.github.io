@@ -1287,14 +1287,7 @@ img { max-width: 100%; }
 .croc.pirate .tooth { width: 26px; height: 26px; border-radius: 50%; background: #1c1d20; border-color: #b8793c; }
 .croc.pirate .tooth:not([disabled]):hover { background: #b8793c; }
 @media (prefers-reduced-motion: reduce) { .runner { animation-duration: 0.01s; } .lpath { animation: none; stroke-dashoffset: 0; } }
-/* arcade mini games */
-.mini { display: grid; gap: 8px; justify-items: center; }
-.mini-cv { width: min(100%, 340px); aspect-ratio: 1; border: 1px solid var(--line); background: #141416; touch-action: none; user-select: none; -webkit-user-select: none; }
-.mini-ctl { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
-.dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(2, 46px); gap: 4px; }
-.mini-b { min-height: 46px; font-size: 18px; padding: 0 10px; touch-action: none; user-select: none; -webkit-user-select: none; }
-@media (max-width: 959px) { .room .mini-cv { width: min(100%, 300px); } }
-@media (max-width: 959px) { .stage.hide-m { display: none; } .room .mini .hint { display: none; } }
+@media (max-width: 959px) { .stage.hide-m { display: none; } }
 
 /* ---------- 전략본부 · 두뇌싸움 ---------- */
 .bg-wrap, .bs-wrap, .nt, .oc, .bd, .yacht, .bb, .tb, .auc { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
