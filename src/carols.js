@@ -3,21 +3,21 @@
 export const CAROLS = {
   /* Jingle Bells (후렴) */
   jingle: {
-    name: "징글벨", bpm: 120, beats: 4, bells: true,
+    name: "징글벨", bpm: 144, beats: 4, bells: true,
     notes: "E4 1 E4 1 E4 2 | E4 1 E4 1 E4 2 | E4 1 G4 1 C4 1.5 D4 0.5 | E4 4 | F4 1 F4 1 F4 1.5 F4 0.5 | F4 1 E4 1 E4 1 E4 0.5 E4 0.5 | E4 1 D4 1 D4 1 E4 1 | D4 2 G4 2 | " +
            "E4 1 E4 1 E4 2 | E4 1 E4 1 E4 2 | E4 1 G4 1 C4 1.5 D4 0.5 | E4 4 | F4 1 F4 1 F4 1.5 F4 0.5 | F4 1 E4 1 E4 1 E4 0.5 E4 0.5 | G4 1 G4 1 F4 1 D4 1 | C4 4",
     chords: ["C", "C", "C", "C", "F", "C", "D7", "G7", "C", "C", "C", "C", "F", "C", "G7", "C"]
   },
   /* We Wish You a Merry Christmas */
   wish: {
-    name: "We Wish You a Merry Christmas", bpm: 132, beats: 3, bells: true,
+    name: "We Wish You a Merry Christmas", bpm: 160, beats: 3, bells: true,
     notes: "R 2 D4 1 | G4 1 G4 0.5 A4 0.5 G4 0.5 F#4 0.5 | E4 1 C4 1 E4 1 | A4 1 A4 0.5 B4 0.5 A4 0.5 G4 0.5 | F#4 1 D4 1 F#4 1 | B4 1 B4 0.5 C5 0.5 B4 0.5 A4 0.5 | " +
            "G4 1 E4 1 D4 0.5 D4 0.5 | E4 1 A4 1 F#4 1 | G4 2 D4 1 | G4 1 G4 1 G4 1 | F#4 2 F#4 1 | G4 1 F#4 1 E4 1 | D4 2 A4 1 | B4 1 A4 1 G4 1 | D5 1 D4 1 D4 0.5 D4 0.5 | E4 1 A4 1 F#4 1 | G4 3",
     chords: ["G", "G", "C", "A7", "D", "B7", "Em", "C D7", "G", "G", "D", "Em", "D", "G", "C", "D7", "G"]
   },
   /* Deck the Halls */
   deck: {
-    name: "Deck the Halls", bpm: 112, beats: 4, bells: true,
+    name: "Deck the Halls", bpm: 131, beats: 4, bells: true,
     notes: "G4 1.5 F4 0.5 E4 1 D4 1 | C4 1 D4 1 E4 1 C4 1 | D4 0.5 E4 0.5 F4 0.5 D4 0.5 E4 1.5 D4 0.5 | C4 1 B3 1 C4 2 | " +
            "G4 1.5 F4 0.5 E4 1 D4 1 | C4 1 D4 1 E4 1 C4 1 | D4 0.5 E4 0.5 F4 0.5 D4 0.5 E4 1.5 D4 0.5 | C4 1 B3 1 C4 2 | " +
            "D4 1.5 E4 0.5 F4 1 D4 1 | E4 1.5 F4 0.5 G4 1 D4 1 | E4 0.5 F#4 0.5 G4 1 A4 0.5 B4 0.5 C5 1 | B4 1 A4 1 G4 2 | " +
@@ -26,14 +26,14 @@ export const CAROLS = {
   },
   /* Silent Night (고요한 밤) — 6/8을 4분음표 3박으로 */
   silent: {
-    name: "고요한 밤", bpm: 72, beats: 3, bells: false, soft: true,
+    name: "고요한 밤", bpm: 68, beats: 3, bells: false, soft: true,
     notes: "G4 0.75 A4 0.25 G4 0.5 E4 1.5 | G4 0.75 A4 0.25 G4 0.5 E4 1.5 | D5 1 D5 0.5 B4 1.5 | C5 1 C5 0.5 G4 1.5 | A4 1 A4 0.5 C5 0.75 B4 0.25 A4 0.5 | G4 0.75 A4 0.25 G4 0.5 E4 1.5 | " +
            "A4 1 A4 0.5 C5 0.75 B4 0.25 A4 0.5 | G4 0.75 A4 0.25 G4 0.5 E4 1.5 | D5 1 D5 0.5 F5 0.75 D5 0.25 B4 0.5 | C5 1.5 E5 1.5 | C5 0.5 G4 0.5 E4 0.5 G4 0.75 F4 0.25 D4 0.5 | C4 3",
     chords: ["C", "C", "G7", "C", "F", "C", "F", "C", "G7", "C", "C G7", "C"]
   },
   /* Carol of the Bells (우크라이나 민요 '셰드릭') — 마피아 낮의 긴장감 */
   bells: {
-    name: "Carol of the Bells", bpm: 100, beats: 3, bells: false, minor: true,
+    name: "Carol of the Bells", bpm: 114, beats: 3, bells: false, minor: true,
     notes: "Bb4 1 A4 0.5 Bb4 0.5 G4 1 | Bb4 1 A4 0.5 Bb4 0.5 G4 1 | Bb4 1 A4 0.5 Bb4 0.5 G4 1 | Bb4 1 A4 0.5 Bb4 0.5 G4 1 | " +
            "D5 1 C5 0.5 D5 0.5 Bb4 1 | D5 1 C5 0.5 D5 0.5 Bb4 1 | F5 1 Eb5 0.5 F5 0.5 D5 1 | F5 1 Eb5 0.5 F5 0.5 D5 1 | " +
            "G5 0.5 G5 0.5 G5 0.5 F5 0.5 Eb5 0.5 D5 0.5 | C5 0.5 C5 0.5 C5 0.5 Bb4 0.5 A4 0.5 G4 0.5 | A4 0.5 Bb4 0.5 C5 0.5 A4 0.5 Bb4 1 | Bb4 1 A4 0.5 Bb4 0.5 G4 1",
