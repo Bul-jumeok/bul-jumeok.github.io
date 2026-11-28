@@ -140,13 +140,22 @@ function currentRoute() { return location.hash.slice(1) || "hq"; }
 /* ---------- sound effects: generated with Web Audio, no audio files ---------- */
 const SND = { ctx: null, on: true, buf: null, breath: null, lastSec: null, lastKey: "", lastPop: 0 };
 try { SND.on = localStorage.getItem("bf-sound") !== "off"; } catch (e) {}
-/* volume sliders (0~100). 효과음 80 = 예전 크기, 배경음악 70 = 예전보다 약 1.6배 */
-const VOL = { bgm: 70, sfx: 80 };
+/* volume sliders (0~100). 지금의 60 = 바로 전 버전의 100 */
+const VOL = { bgm: 60, sfx: 60 };
 if (EMU) window.__snd = SND;
 try { const v = JSON.parse(localStorage.getItem("bf-vol") || "{}"); if (v.bgm >= 0 && v.bgm <= 100) VOL.bgm = v.bgm; if (v.sfx >= 0 && v.sfx <= 100) VOL.sfx = v.sfx; } catch (e) {}
-function sfxGain() { return VOL.sfx / 80 * 1.1; }
+function sfxGain() { return VOL.sfx / 60 * 1.375; }
+/* loud settings: a limiter in front of the speakers keeps big volumes from crackling */
+function limiter(c) {
+  if (!SND.lim || SND.lim.context !== c) {
+    const k = c.createDynamicsCompressor();
+    k.threshold.value = -8; k.knee.value = 6; k.ratio.value = 12; k.attack.value = 0.003; k.release.value = 0.25;
+    k.connect(c.destination); SND.lim = k;
+  }
+  return SND.lim;
+}
 function sfxOut(c) {
-  if (!SND.sfxOut || SND.sfxOut.context !== c) { SND.sfxOut = c.createGain(); SND.sfxOut.gain.value = sfxGain(); SND.sfxOut.connect(c.destination); }
+  if (!SND.sfxOut || SND.sfxOut.context !== c) { SND.sfxOut = c.createGain(); SND.sfxOut.gain.value = sfxGain(); SND.sfxOut.connect(limiter(c)); }
   return SND.sfxOut;
 }
 function ac() {
@@ -327,7 +336,7 @@ function sfx(name) {
 /* ---------- 배경음악: 직접 합성한 잔잔한 루프 (저작권 걱정 없음) ---------- */
 const BGM = { on: true, mood: null, master: null, timer: null, next: 0, bar: 0 };
 try { BGM.on = localStorage.getItem("bf-bgm") !== "off"; } catch (e) {}
-const BGM_VOL = 0.462;   /* 슬라이더 100일 때 */
+const BGM_VOL = 0.77;   /* 슬라이더 100일 때 */
 function bgmLevel(M) { return Math.max(0.0001, BGM_VOL * (VOL.bgm / 100) * (M ? M.vol : 1)); }
 if (EMU) window.__bgm = BGM;
 /* 8-bit game music: drums, a bouncing bass and a lead melody. bpm per mood, 4 chords (MIDI roots + chord tones) */
@@ -378,7 +387,7 @@ function bgmTick() {
     const g = c.createGain(), f = c.createBiquadFilter();
     f.type = "lowpass"; f.frequency.value = M.cut; f.Q.value = 0.4;
     g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.linearRampToValueAtTime(bgmLevel(M), c.currentTime + 2.5); BGM.vol = M.vol;
-    g.connect(f); f.connect(c.destination);
+    g.connect(f); f.connect(limiter(c));
     BGM.master = g; BGM.next = c.currentTime + 0.15; BGM.bar = 0;
   }
   if (BGM.next < c.currentTime) BGM.next = c.currentTime + 0.05;
