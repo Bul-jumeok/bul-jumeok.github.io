@@ -730,6 +730,22 @@ function subscribeBase() {
 const ALIVE_MS = 60000, PRESENT_MS = 90000;
 let beatT = null;
 function tsMs(t) { return t && t.toMillis ? t.toMillis() : 0; }
+/* Phone/PC clocks can be off by many seconds. Timers compare the server's phase start with this device's clock,
+   so a device that runs ahead would end every turn early for everyone. Measure the gap against server time
+   (from our own room heartbeat) and read every phase start in this device's clock. off = server - local. */
+const CLK = { off: 0, sentAt: 0, best: Infinity };
+function phMs(r) { return r.phaseAt.toMillis() - (S.roomPending ? 0 : CLK.off); }
+function clockSample(r) {
+  if (!CLK.sentAt || !r || !r.seen) return;
+  const mine = r.seen[myUid()], t = mine && mine.t && mine.t.toMillis ? mine.t.toMillis() : 0;
+  if (!t) return;
+  const now = Date.now(), rtt = now - CLK.sentAt;
+  CLK.sentAt = 0;
+  if (rtt < 0 || rtt > 5000) return;
+  /* keep the sample with the shortest round trip (most precise), but let a much newer reading replace a stale one */
+  if (rtt <= CLK.best + 300) { CLK.best = Math.min(CLK.best, rtt); CLK.off = t - (now - rtt / 2); }
+  if (EMU) window.__clk = CLK;
+}
 function roomAlive(r) {
   if (!r || !r.status || r.status === "closed") return false;
   const now = Date.now();
@@ -749,6 +765,7 @@ function presentPlayers(r) {
 function beat(id) {
   const uid = myUid(); if (!uid || !id) return;
   const me = meMember();
+  CLK.sentAt = Date.now();
   updateDoc(doc(db, "rooms", id), { ["seen." + uid]: { t: serverTimestamp(), m: me ? me.id : null } }).catch(function () {});
 }
 function unbeat(id) {
@@ -773,11 +790,13 @@ function watchRoom(id) {
   S.roomId = id; S.room = null; S.roomMissing = false; S.msgs = [];
   if (!id) return;
   beat(id);
-  beatT = setInterval(function () { if (document.visibilityState !== "hidden") beat(id); }, 25000);
+  beatT = setInterval(function () { if (document.visibilityState !== "hidden") beat(id); }, 15000);
   let msgsLoaded = false;
   roomUnsubs.push(onSnapshot(doc(db, "rooms", id), function (snap) {
     const prev = S.room;
     S.room = snap.exists() ? Object.assign({ id: snap.id }, snap.data({ serverTimestamps: "estimate" })) : null;
+    S.roomPending = snap.metadata.hasPendingWrites;
+    if (!S.roomPending) clockSample(S.room);
     sfxRoom(prev, S.room);
     S.roomMissing = !snap.exists(); render();
   }));
@@ -2101,7 +2120,7 @@ function gameRules(g) {
     liar: ["한 명만 제시어를 몰라요(라이어).", "차례대로 한 마디씩 설명하고, 토론 후 라이어를 투표해요.", "단어 3·5·8·10개를 이어서 하고 점수를 합산해요."],
     mafia: ["마피아·경찰·의사·시민 중 하나를 몰래 받아요.", "밤에는 마피아가 처리, 낮에는 토론과 투표로 처형.", "마피아를 다 잡으면 시민 승리."],
     smoke: ["버튼을 누르면 들숨, 떼면 날숨. 들이마시는 동안만 담배가 타요.", "너무 오래 마시거나 덜 내쉬면 기침!", "40초 안에 못 피우면 킬러에게 처형."],
-    assoc: ["힌트가 8초마다 하나씩 열려요.", "빨리 맞힐수록 고득점, 기회는 2번."],
+    assoc: ["힌트가 8초마다 하나씩 열려요.", "빨리 맞힐수록 고득점, 기회는 3번."],
     sketch: ["돌아가며 한 명이 그리고 나머지가 맞혀요.", "먼저 맞힐수록 고득점."],
     manito: ["몰래 뽑은 상대를 크리스마스까지 칭찬하고 챙겨요.", "12월 25일 정체 공개."]
   }[g.id];
@@ -2381,7 +2400,7 @@ function durOf(r) {
   return (r && r.type === "mafia" ? MDUR : r && r.type === "sketch" ? SDUR : r && r.type === "smoke" ? SMDUR : r && r.type === "assoc" ? AQDUR : DUR)[r && r.status]; }
 function phaseEnd(r) {
   if (!r || !durOf(r) || !r.phaseAt || !r.phaseAt.toMillis) return null;
-  return r.phaseAt.toMillis() + durOf(r) * 1000;
+  return phMs(r) + durOf(r) * 1000;
 }
 function fmtSec(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 function timerEl(r, label) {
@@ -3133,7 +3152,7 @@ function mChat(r, ctx) {
 /* ---------- 연상퀴즈: 힌트가 하나씩 열리고, 먼저 맞힐수록 고득점 ---------- */
 const AQDUR = { clue: 40, reveal: 6 };
 if (FAST) Object.keys(AQDUR).forEach(function (k) { AQDUR[k] = Math.max(2, Math.round(AQDUR[k] / FAST)); });
-const AQ_HINTS = 5, AQ_TRIES = 2;
+const AQ_HINTS = 5, AQ_TRIES = 3;
 const AQ = { key: null, idx: -1 };
 /* 오늘 나온 문제는 오늘 다시 안 나와요: 오늘 쓰인 방들의 기록을 모아서 빼요 */
 function todayKey() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -3155,7 +3174,7 @@ function aqHintMs() { return AQDUR.clue * 1000 / AQ_HINTS; }
 function aqHintIdx(r, now) {
   if (!r || r.status !== "clue") return AQ_HINTS - 1;
   if (!r.phaseAt || !r.phaseAt.toMillis) return 0;
-  return Math.max(0, Math.min(AQ_HINTS - 1, Math.floor(((now || Date.now()) - r.phaseAt.toMillis()) / aqHintMs())));
+  return Math.max(0, Math.min(AQ_HINTS - 1, Math.floor(((now || Date.now()) - phMs(r)) / aqHintMs())));
 }
 function aqPts(idx) { return [10, 8, 6, 4, 2][idx] || 2; }      /* 힌트 1개: 10점 … 5개: 2점 */
 const AQ_RANK = [5, 3, 1];                                      /* 1등 +5, 2등 +3, 3등 +1 */
@@ -3245,7 +3264,7 @@ async function aqGuess(text) {
       const scores = Object.assign({}, rr.scores || {}), got = Object.assign({}, rr.pts || {});
       scores[me.id] = (scores[me.id] || 0) + pts; got[me.id] = pts;
       solved.push(me.id);
-      sysMsg(tx, rr, "🎯 " + me.nick + "님 정답! 힌트 " + (idx + 1) + "개 보고 " + (solved.length + 1) + "등으로 맞혔어요 (+" + pts + "점" + (bonus ? ", 순위 보너스 " + bonus + "점 포함" : "") + ")");
+      sysMsg(tx, rr, "🎯 " + me.nick + "님 정답! 힌트 " + (idx + 1) + "개 보고 " + solved.length + "등으로 맞혔어요 (+" + pts + "점" + (bonus ? ", 순위 보너스 " + bonus + "점 포함" : "") + ")");
       const patch = { solved: solved, scores: scores, pts: got };
       if (aqDone(rr, solved, tries)) { sysMsg(tx, rr, "다 끝났어요! 정답은 ‘" + rr.cur.a + "’"); Object.assign(patch, nextPhase(rr, { status: "reveal" })); }
       tx.update(roomRef(), patch);
@@ -3270,7 +3289,7 @@ function aqTickHint(r) {
   if (AQ.key !== key) { AQ.key = key; AQ.idx = idx; return; }
   if (idx !== AQ.idx) { AQ.idx = idx; sfx("flip"); render(); return; }
   const w = document.querySelector(".aq-wait");
-  if (w && r.phaseAt && r.phaseAt.toMillis) w.textContent = Math.max(1, Math.ceil((r.phaseAt.toMillis() + (idx + 1) * aqHintMs() - Date.now()) / 1000)) + "초 뒤 공개";
+  if (w && r.phaseAt && r.phaseAt.toMillis) w.textContent = Math.max(1, Math.ceil((phMs(r) + (idx + 1) * aqHintMs() - Date.now()) / 1000)) + "초 뒤 공개";
 }
 function aqSlots(cur, show) {
   return h("div", { class: "aq-slots", "aria-label": "정답 " + aqLen(cur) + "글자" }, Array.from(cur.a).map(function (ch) {
@@ -3380,7 +3399,7 @@ function screenAssocRoom(r) {
       h("div", { class: "aq-len" }, aqSlots(cur, reveal || iSolved), h("b", { text: aqLen(cur) + "글자" })),
       h("p", { class: "aq-status" + (iSolved ? " ok" : ""), text: status }));
     const hintMs = aqHintMs();
-    const nextAt = !reveal && r.phaseAt && r.phaseAt.toMillis ? r.phaseAt.toMillis() + (idx + 1) * hintMs : null;
+    const nextAt = !reveal && r.phaseAt && r.phaseAt.toMillis ? phMs(r) + (idx + 1) * hintMs : null;
     const hints = h("ol", { class: "aq-hints" }, cur.h.map(function (t, i) {
       const open = reveal || i <= idx;
       const wait = nextAt && i === idx + 1 ? Math.max(1, Math.ceil((nextAt - Date.now()) / 1000)) : null;
@@ -3736,7 +3755,7 @@ function quizRound(x, r, answerText, extra) {
 /* schedule a redraw when the next timed hint should appear */
 function hintStep(r, every, max) {
   if (!r.phaseAt || !r.phaseAt.toMillis) return 0;
-  const el = Date.now() - r.phaseAt.toMillis(), k = Math.min(max, Math.floor(el / every));
+  const el = Date.now() - phMs(r), k = Math.min(max, Math.floor(el / every));
   clearTimeout(S.hintT);
   if (k < max) S.hintT = setTimeout(render, every - (el % every) + 60);
   return k;
@@ -4891,7 +4910,7 @@ function copyDef(o) {
     panel: function (r, me) {
       const q = r.q, paint = function (c) { refPaint(c, q.seed, q.n); };
       const showFor = o.show ? (FAST ? Math.max(2, Math.round(o.show / FAST)) : o.show) * 1000 : 0;
-      const since = r.phaseAt && r.phaseAt.toMillis ? Date.now() - r.phaseAt.toMillis() : 0, peek = o.show && since < showFor;
+      const since = r.phaseAt && r.phaseAt.toMillis ? Date.now() - phMs(r) : 0, peek = o.show && since < showFor;
       if (peek && !S.artPeekT) S.artPeekT = setTimeout(function () { S.artPeekT = 0; render(); }, showFor - since + 50);
       const pad = drawPad(artRk(r), function (id, cv) { return pSubmit({ img: id, sim: artSim(cv, paint) }); }, { endAt: padEnd(r), locked: peek, lockText: "👀 잘 봐 두세요! 곧 사라져요" });
       return h("div", { class: "art-duo" }, o.show ? (peek ? refCanvas(paint, "ref") : h("div", { class: "art-img empty ref", text: "🙈 그림은 사라졌어요. 기억으로!" })) : refCanvas(paint, "ref"), pad);
@@ -5079,7 +5098,7 @@ async function pStart() {
 async function pSubmit(val) {
   const me = meMember(), r = S.room; if (!me || !r || r.status !== "q") return;
   try {
-    const el = r.phaseAt && r.phaseAt.toMillis ? Math.max(0, Date.now() - r.phaseAt.toMillis()) : 0;
+    const el = r.phaseAt && r.phaseAt.toMillis ? Math.max(0, Date.now() - phMs(r)) : 0;
     await updateDoc(roomRef(), { ["subs." + me.id]: val, ["subT." + me.id]: el });
     await pMaybeResolve();
   } catch (e) { toast(errText(e)); }
@@ -5717,7 +5736,7 @@ function skDown(e) {
   SK.cur = { color: SK.eraser ? PAPER : SK.color, size: SK.eraser ? Math.max(16, SK.size * 2) : SK.size, pts: line ? [p0[0], p0[1], p0[0], p0[1]] : p0, line: line };
   skRedraw();
   clearInterval(SK.flushT);
-  SK.flushT = setInterval(function () { skFlush(false); }, 600);
+  SK.flushT = setInterval(function () { skFlush(false); }, 250);
 }
 function skMove(e) {
   if (!SK.drawing || !SK.cur) return;
@@ -6092,10 +6111,10 @@ const SM = {
   burn: 5,        /* % of the cigarette per second while inhaling */
   deep: 0.6,      /* from here inhaling burns faster */
   deepMult: 1.6,
-  safe: 0.07,     /* breathing out below this makes the next inhale safe */
-  riskSpan: 0.28, /* above `safe`, cough chance grows to 100% over this much air */
-  coughMs: 4500,
-  coughLoss: 8
+  safe: 0.1,      /* breathing out below this makes the next inhale safe */
+  riskSpan: 0.35, /* above `safe`, cough chance grows to 100% over this much air */
+  coughMs: 3500,
+  coughLoss: 5
 };
 const KILLER_LINES = ["꼴찌는 용서 못 해.", "담배 하나 제대로 못 피우나?", "본부에 꼴찌 자리는 없다.", "다음 생엔 폐활량부터 키워라.", "연기만 뿜다 가는구나."];
 const SMK = { rk: null, unsub: null, live: {}, holding: false, L: 0, prog: 0, coughUntil: 0, coughWhy: "", done: false, fin: null,
@@ -6229,7 +6248,7 @@ function smTick(t) {
       SMK.done = true; SMK.holding = false;
       breathStop(); sfx("correct");
       const r = S.room;
-      SMK.fin = r.phaseAt && r.phaseAt.toMillis ? now - r.phaseAt.toMillis() : 0;
+      SMK.fin = r.phaseAt && r.phaseAt.toMillis ? now - phMs(r) : 0;
       smSend(true);
       if (SK.pendingRender) { SK.pendingRender = false; render(); }
     }
