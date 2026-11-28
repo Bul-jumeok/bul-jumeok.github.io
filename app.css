@@ -1387,3 +1387,15 @@ img { max-width: 100%; }
 .inv-ico { font-size: 24px; } .inv-txt { flex: 1; min-width: 0; display: grid; } .inv-txt small { color: var(--muted); font-size: 12px; }
 @keyframes invIn { from { transform: translateY(-20px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .inv-banner { animation: none; } }
+
+/* ---------- 음량 조절 ---------- */
+.fb-right { position: relative; }
+.vol-pop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 80; width: min(300px, calc(100vw - 24px)); padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--red); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); display: grid; gap: 10px; }
+.vol-pop[hidden] { display: none; }
+.vol-title { margin: 0; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--muted); }
+.vol-row { display: grid; grid-template-columns: 82px 1fr 42px; align-items: center; gap: 8px; }
+.vol-label { font-size: 13px; white-space: nowrap; }
+.vol-num { font-family: var(--font-mono); font-size: 12px; text-align: right; }
+.vol-row input[type=range] { width: 100%; accent-color: var(--red); height: 28px; }
+.vol-hint { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.5; }

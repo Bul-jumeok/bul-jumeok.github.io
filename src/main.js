@@ -140,6 +140,15 @@ function currentRoute() { return location.hash.slice(1) || "hq"; }
 /* ---------- sound effects: generated with Web Audio, no audio files ---------- */
 const SND = { ctx: null, on: true, buf: null, breath: null, lastSec: null, lastKey: "", lastPop: 0 };
 try { SND.on = localStorage.getItem("bf-sound") !== "off"; } catch (e) {}
+/* volume sliders (0~100). 효과음 80 = 예전 크기, 배경음악 70 = 예전보다 약 1.6배 */
+const VOL = { bgm: 70, sfx: 80 };
+if (EMU) window.__snd = SND;
+try { const v = JSON.parse(localStorage.getItem("bf-vol") || "{}"); if (v.bgm >= 0 && v.bgm <= 100) VOL.bgm = v.bgm; if (v.sfx >= 0 && v.sfx <= 100) VOL.sfx = v.sfx; } catch (e) {}
+function sfxGain() { return VOL.sfx / 80; }
+function sfxOut(c) {
+  if (!SND.sfxOut || SND.sfxOut.context !== c) { SND.sfxOut = c.createGain(); SND.sfxOut.gain.value = sfxGain(); SND.sfxOut.connect(c.destination); }
+  return SND.sfxOut;
+}
 function ac() {
   if (!SND.on) return null;
   /* iPhone: treat our sounds as media so the silent switch doesn't mute them (iOS 16.4+) */
@@ -218,7 +227,7 @@ function tone(f, dur, o) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(v, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  os.connect(g); g.connect(c.destination);
+  os.connect(g); g.connect(sfxOut(c));
   os.start(t); os.stop(t + dur + 0.05);
 }
 function hiss(dur, o) {
@@ -234,7 +243,7 @@ function hiss(dur, o) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.linearRampToValueAtTime(v, t + (o.attack || 0.01));
   if (!o.hold) g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(f); f.connect(g); g.connect(c.destination);
+  src.connect(f); f.connect(g); g.connect(sfxOut(c));
   src.start(t);
   if (!o.hold) src.stop(t + dur + 0.05);
   return { src: src, g: g, c: c };
@@ -305,7 +314,7 @@ const SFX = {
     os.type = "sine"; os.frequency.setValueAtTime(110, t); os.frequency.linearRampToValueAtTime(82, t + 2.2);
     lfo.frequency.value = 5; lg.gain.value = 6; lfo.connect(lg); lg.connect(os.frequency);
     g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.16, t + 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
-    os.connect(g); g.connect(c.destination);
+    os.connect(g); g.connect(sfxOut(c));
     os.start(t); lfo.start(t); os.stop(t + 2.5); lfo.stop(t + 2.5);
     tone(392, 0.5, { type: "triangle", gain: 0.06, at: 0.2 }); tone(311, 0.8, { type: "triangle", gain: 0.06, at: 0.6 });
   }
@@ -318,7 +327,8 @@ function sfx(name) {
 /* ---------- 배경음악: 직접 합성한 잔잔한 루프 (저작권 걱정 없음) ---------- */
 const BGM = { on: true, mood: null, master: null, timer: null, next: 0, bar: 0 };
 try { BGM.on = localStorage.getItem("bf-bgm") !== "off"; } catch (e) {}
-const BGM_VOL = 0.18;
+const BGM_VOL = 0.42;   /* 슬라이더 100일 때 */
+function bgmLevel(M) { return Math.max(0.0001, BGM_VOL * (VOL.bgm / 100) * (M ? M.vol : 1)); }
 if (EMU) window.__bgm = BGM;
 /* 8-bit game music: drums, a bouncing bass and a lead melody. bpm per mood, 4 chords (MIDI roots + chord tones) */
 const MOODS = {
@@ -367,7 +377,7 @@ function bgmTick() {
   if (!BGM.master) {
     const g = c.createGain(), f = c.createBiquadFilter();
     f.type = "lowpass"; f.frequency.value = M.cut; f.Q.value = 0.4;
-    g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.linearRampToValueAtTime(BGM_VOL * M.vol, c.currentTime + 2.5);
+    g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.linearRampToValueAtTime(bgmLevel(M), c.currentTime + 2.5); BGM.vol = M.vol;
     g.connect(f); f.connect(c.destination);
     BGM.master = g; BGM.next = c.currentTime + 0.15; BGM.bar = 0;
   }
@@ -469,7 +479,7 @@ function breathStart(L) {
     og.gain.setValueAtTime(0.0001, now);
     og.gain.setValueAtTime(0.0001, t);
     og.gain.linearRampToValueAtTime(0.03, t + 0.2);
-    os.connect(og); og.connect(c.destination);
+    os.connect(og); og.connect(sfxOut(c));
     os.start(now);
     b.os = os; b.og = og;
     SND.breath = b;
@@ -6812,9 +6822,30 @@ function setBgm(on) {
   bgmSet(bgmMoodFor());
   toast(on ? (SND.on ? "배경음악을 켰어요. 게임방에 들어가면 나와요." : "배경음악을 켰어요. 🔇 소리도 켜야 들려요.") : "배경음악을 껐어요.");
 }
+function setVol(kind, v) {
+  VOL[kind] = v;
+  try { localStorage.setItem("bf-vol", JSON.stringify(VOL)); } catch (e) {}
+  const c = SND.ctx;
+  if (kind === "sfx" && SND.sfxOut && c) SND.sfxOut.gain.setTargetAtTime(sfxGain(), c.currentTime, 0.03);
+  if (kind === "bgm" && BGM.master && c) BGM.master.gain.setTargetAtTime(bgmLevel({ vol: BGM.vol || 1 }), c.currentTime, 0.05);
+}
+function volRow(kind, label, onBtn) {
+  const out = h("b", { class: "vol-num", text: VOL[kind] + "%" });
+  const sl = h("input", { type: "range", min: "0", max: "100", step: "5", value: String(VOL[kind]), "aria-label": label + " 음량" });
+  sl.addEventListener("input", function () { setVol(kind, +sl.value); out.textContent = sl.value + "%"; });
+  sl.addEventListener("change", function () { if (kind === "sfx") sfx("ding"); });
+  return h("div", { class: "vol-row" }, h("span", { class: "vol-label", text: label }), sl, out, onBtn);
+}
+const volPanel = h("div", { class: "vol-pop", hidden: true, role: "dialog", "aria-label": "음량 조절" },
+  h("p", { class: "vol-title", text: "음량 조절" }),
+  volRow("bgm", "🎵 배경음악"), volRow("sfx", "🔊 효과음"),
+  h("p", { class: "vol-hint", text: "켜기/끄기는 옆의 🎵 🔊 버튼. 휴대폰 자체 볼륨도 같이 확인해 주세요." }));
+const volBtn = h("button", { type: "button", class: "snd-btn vol-btn", "aria-label": "음량 조절", "aria-expanded": "false", text: "🎚️",
+  onclick: function (e) { e.stopPropagation(); const open = volPanel.hidden; volPanel.hidden = !open; volBtn.setAttribute("aria-expanded", open ? "true" : "false"); if (open) { mediaKeepAlive(true); ac(); } } });
+document.addEventListener("click", function (e) { if (!volPanel.hidden && !volPanel.contains(e.target) && e.target !== volBtn) { volPanel.hidden = true; volBtn.setAttribute("aria-expanded", "false"); } });
 const header = h("div", { class: "filebar wrap" },
   h("span", { class: "brand" }, logo("logo-s"), h("span", null, h("b", { text: "불주먹조직" }), " · 비밀본부")),
-  h("span", { class: "fb-right" }, bgmBtn, soundBtn, opChip, h("span", { class: "lvl", text: "기밀 등급 A" })));
+  h("span", { class: "fb-right" }, volBtn, bgmBtn, soundBtn, volPanel, opChip, h("span", { class: "lvl", text: "기밀 등급 A" })));
 const TABS = [["hq", "본부"], ["members", "조직원"], ["games", "게임방"], ["guestbook", "방명록"]];
 const tabEls = {};
 const tabbar = h("nav", { class: "tabbar", "aria-label": "주 메뉴" },
