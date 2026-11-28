@@ -2119,8 +2119,8 @@ function gameRules(g) {
   const old = {
     liar: ["한 명만 제시어를 몰라요(라이어).", "차례대로 한 마디씩 설명하고, 토론 후 라이어를 투표해요.", "단어 3·5·8·10개를 이어서 하고 점수를 합산해요."],
     mafia: ["마피아·경찰·의사·시민 중 하나를 몰래 받아요.", "밤에는 마피아가 처리, 낮에는 토론과 투표로 처형.", "마피아를 다 잡으면 시민 승리."],
-    smoke: ["버튼을 누르면 들숨, 떼면 날숨. 들이마시는 동안만 담배가 타요.", "너무 오래 마시거나 덜 내쉬면 기침!", "40초 안에 못 피우면 킬러에게 처형."],
-    assoc: ["힌트가 8초마다 하나씩 열려요.", "빨리 맞힐수록 고득점, 기회는 3번."],
+    smoke: ["버튼을 누르면 들숨, 떼면 날숨. 들이마시는 동안만 담배가 타요.", "너무 오래 마시거나 덜 내쉬면 기침!", "50초 안에 못 피우면 킬러에게 처형."],
+    assoc: ["힌트가 10초마다 하나씩 열려요.", "빨리 맞힐수록 고득점, 기회는 3번."],
     sketch: ["돌아가며 한 명이 그리고 나머지가 맞혀요.", "먼저 맞힐수록 고득점."],
     manito: ["몰래 뽑은 상대를 크리스마스까지 칭찬하고 챙겨요.", "12월 25일 정체 공개."]
   }[g.id];
@@ -2157,7 +2157,7 @@ function screenOpenRooms() {
 const STATUS_LABEL = { lobby: "대기 중", hint: "설명 중", discuss: "토론 중", vote: "투표 중", guess: "라이어 반격", result: "결과 발표" };
 /* Seconds per phase. ?emu&fast shortens them for local tests. */
 const FAST = EMU && new URLSearchParams(location.search).has("fast") ? (parseFloat(new URLSearchParams(location.search).get("fast")) || 10) : 0;
-const DUR = { hint: 20, discuss: 120, vote: 20, guess: 20 };
+const DUR = { hint: 30, discuss: 120, vote: 20, guess: 20 };
 if (FAST) Object.keys(DUR).forEach(function (k) { DUR[k] = Math.max(2, Math.round(DUR[k] / FAST)); });
 function screenLiarLobby() {
   const me = meMember();
@@ -2193,7 +2193,7 @@ function liarRules() {
         h("li", { text: "방을 만들고 단톡방에 알려요. 다들 게임방 → 라이어에서 그 방을 눌러 참가해요." }),
         h("li", { text: "3명 이상 모이면 아무나 ‘게임 시작’을 눌러요. 만든 사람도 라이어가 누군지 몰라요." }),
         h("li", { text: "각자 카드를 몰래 확인해요. 라이어에게는 주제만 보여요." }),
-        h("li", { text: "랜덤 순서로 한 명씩 제시어를 한 마디로 설명해요. 한 사람당 20초, 시간이 지나면 다음 사람으로 넘어가요." }),
+        h("li", { text: "랜덤 순서로 한 명씩 제시어를 한 마디로 설명해요. 한 사람당 30초, 시간이 지나면 다음 사람으로 넘어가요." }),
         h("li", { text: "설명이 끝나면 2분 동안 대화창에서 토론해요. 절반 이상이 ‘바로 투표하기’를 누르면 일찍 끝나요." }),
         h("li", { text: "20초 안에 라이어로 의심되는 사람에게 투표해요." }),
         h("li", { text: "라이어를 맞히면 라이어에게 20초의 마지막 기회가 있어요. 제시어를 맞히면 라이어 승리, 못 맞히면 조직원 승리. 동점이거나 엉뚱한 사람을 지목하면 라이어 승리예요." })),
@@ -3150,7 +3150,7 @@ function mChat(r, ctx) {
 
 
 /* ---------- 연상퀴즈: 힌트가 하나씩 열리고, 먼저 맞힐수록 고득점 ---------- */
-const AQDUR = { clue: 40, reveal: 6 };
+const AQDUR = { clue: 60, reveal: 6 };
 if (FAST) Object.keys(AQDUR).forEach(function (k) { AQDUR[k] = Math.max(2, Math.round(AQDUR[k] / FAST)); });
 const AQ_HINTS = 5, AQ_TRIES = 3;
 const AQ = { key: null, idx: -1 };
@@ -3170,7 +3170,7 @@ function dayPatch(r, kind, add) {
   o[kind] = (du[kind] || []).concat(add).slice(-800);
   return o;
 }
-function aqHintMs() { return AQDUR.clue * 1000 / AQ_HINTS; }
+function aqHintMs() { return FAST ? Math.max(1000, Math.round(10000 / FAST)) : 10000; }   /* 힌트는 10초마다, 다 열린 뒤 남은 시간은 마지막 고민 */
 function aqHintIdx(r, now) {
   if (!r || r.status !== "clue") return AQ_HINTS - 1;
   if (!r.phaseAt || !r.phaseAt.toMillis) return 0;
@@ -6103,7 +6103,7 @@ function skChat(r, me, iDraw) {
 
 
 /* ---------- Smoke race (빨리 담배피기): hold to inhale, release to exhale ---------- */
-const SMDUR = { ready: 3, play: 40, shot: 5 };
+const SMDUR = { ready: 5, play: 50, shot: 5 };
 if (FAST) Object.keys(SMDUR).forEach(function (k) { SMDUR[k] = Math.max(2, Math.round(SMDUR[k] / FAST)); });
 const SM = {
   fill: 0.6,      /* lungs per second while inhaling: full (and coughing) after ~1.7 s */
@@ -6143,7 +6143,7 @@ async function smStart() {
       const lineup = presentPlayers(r).slice().sort();
       if (lineup.length < 2) throw { code: "few" };
       const game = (r.game || 0) + 1;
-      sysMsg(tx, { game: game }, "🚬 빨리 담배피기 시작! 40초 안에 다 못 피우면 킬러가 처리합니다.");
+      sysMsg(tx, { game: game }, "🚬 빨리 담배피기 시작! 50초 안에 다 못 피우면 킬러가 처리합니다.");
       tx.update(roomRef(), nextPhase(r, { status: "ready", lineup: lineup, alive: lineup, out: [], round: 1, rk: game * 100 + 1, board: [], shot: null, winner: null, game: game, startedAt: serverTimestamp() }));
     });
   } catch (e) {
@@ -6378,7 +6378,7 @@ function screenSmokeLobby() {
           h("li", { text: "버튼을 꾹 누르고 있으면 들숨, 떼면 날숨이에요. 들이마시는 동안만 담배가 타요." }),
           h("li", { text: "숨이 얼마나 찼는지는 화면에 안 나와요. 들이마시는 소리가 높아질수록 꽉 찬 거예요. 깊게 마실수록 더 빨리 타지만, 너무 오래 마시면 콜록콜록! " + (SM.coughMs / 1000) + "초 동안 못 피우고 담배도 " + SM.coughLoss + "% 날아가요." }),
           h("li", { text: "떼면 ‘후~’ 하고 내쉬어요. 그 소리가 끝나기 전에 또 누르면 덜 내쉰 만큼 기침할 확률이 커져요. 소리를 잘 듣고 감으로 리듬을 타세요." }),
-          h("li", { text: "40초 안에 한 개비를 다 못 피우면 킬러에게 탕! 못 피운 사람은 전부 죽어요." }),
+          h("li", { text: "50초 안에 한 개비를 다 못 피우면 킬러에게 탕! 못 피운 사람은 전부 죽어요." }),
           h("li", { text: "모두 다 피웠으면 제일 늦게 피운 한 명이 탈락해요. 마지막 1인이 남을 때까지 계속해요." }),
           h("li", { text: "다 같이 못 피우면 전원 사망… 킬러의 승리예요." })))));
 }
@@ -6399,7 +6399,7 @@ function screenSmokeRoom(r) {
     body = h("div", { class: "panel" },
       h("div", { class: "field-label", text: "모인 사람 " + n + "명" }),
       h("div", { class: "chips" }, players.map(function (p) { return h("span", { class: "chip static" + (me && p === me.id ? " me" : ""), text: nickOf(p) }); })),
-      h("p", { class: "note", text: "40초 안에 다 못 피우면 전부 킬러에게 처형! 모두 다 피웠으면 제일 늦은 한 명이 탈락해요." }),
+      h("p", { class: "note", text: "50초 안에 다 못 피우면 전부 킬러에게 처형! 모두 다 피웠으면 제일 늦은 한 명이 탈락해요." }),
       !me ? h("p", { class: "note", text: "신원을 고른 조직원만 참가할 수 있어요." })
         : inRoom
           ? h("div", { class: "op-row" },
