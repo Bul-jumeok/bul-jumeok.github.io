@@ -754,6 +754,12 @@ function roomAlive(r) {
   return Object.keys(seen).some(function (k) { return now - tsMs(seen[k] && seen[k].t) < ALIVE_MS; });
 }
 /* players who are actually in the room right now (falls back to everyone if presence is unknown) */
+/* members whose own heartbeat for this room is recent (they really have the room open) */
+function hereCount(r) {
+  const seen = r.seen || {}, here = {}, now = Date.now();
+  Object.keys(seen).forEach(function (k) { const v = seen[k]; if (v && v.m && v.t && v.t.toMillis && now - (v.t.toMillis() - CLK.off) < PRESENT_MS) here[v.m] = 1; });
+  return (r.players || []).filter(function (p) { return here[p]; }).length;
+}
 function presentPlayers(r) {
   const seen = r.seen || {}, here = {};
   let known = false, ref = 0;
@@ -2001,12 +2007,19 @@ function GAME_NAME_OF(type) { const g = REG_BY[type || "liar"]; return g ? g.nam
 
 /* ---------- 조직원 접속 현황 (presence/{memberId}) ---------- */
 const PRES = { list: {}, unsub: null, lastBeat: 0, lastKey: "" };
-const PRES_ONLINE_MS = 3 * 60 * 1000;
+const PRES_ONLINE_MS = 2 * 60 * 1000;
+function inGameArea(rt) { rt = rt == null ? currentRoute() : rt; return rt === "games" || rt.indexOf("cat-") === 0 || rt.indexOf("game-") === 0 || rt.indexOf("room-") === 0; }
+function presenceOff() {
+  const me = meMember(); if (!me || !S.user || PRES.lastKey === me.id + "|off") return;
+  PRES.lastKey = me.id + "|off"; PRES.lastBeat = Date.now();
+  setDoc(doc(db, "presence", me.id), { uid: S.user.uid, m: me.id, t: Timestamp.fromMillis(0), room: null, game: null, playing: false }).catch(function () {});
+}
 function presenceBeat(force) {
-  const me = meMember(); if (!me || !S.user || document.visibilityState === "hidden") return;
+  const me = meMember(); if (!me || !S.user) return;
+  if (document.visibilityState === "hidden" || !inGameArea()) { presenceOff(); return; }
   const r = S.room && currentRoute().indexOf("room-") === 0 ? S.room : null;
   const key = me.id + "|" + (r ? r.id + ":" + (r.status === "lobby" ? "w" : r.status === "result" ? "w" : "p") : "-");
-  if (!force && key === PRES.lastKey && Date.now() - PRES.lastBeat < 90000) return;
+  if (!force && key === PRES.lastKey && Date.now() - PRES.lastBeat < 50000) return;
   PRES.lastKey = key; PRES.lastBeat = Date.now();
   setDoc(doc(db, "presence", me.id), {
     uid: S.user.uid, m: me.id, t: serverTimestamp(),
@@ -2014,7 +2027,8 @@ function presenceBeat(force) {
   }).catch(function () {});
 }
 setInterval(function () { presenceBeat(false); }, 30000);
-document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") presenceBeat(true); });
+document.addEventListener("visibilitychange", function () { presenceBeat(true); });
+window.addEventListener("pagehide", function () { presenceOff(); });
 function watchPresence(on) {
   if (on && !PRES.unsub) {
     PRES.unsub = onSnapshot(collection(db, "presence"), function (snap) {
@@ -2028,7 +2042,7 @@ function presenceOf(mid) {
     const r = S.room && currentRoute().indexOf("room-") === 0 ? S.room : null;
     return { on: true, state: r ? (r.status !== "lobby" && r.status !== "result" ? "play" : "wait") : "on", game: r ? (r.type || "liar") : null };
   }
-  if (!p || !p.t || !p.t.toMillis || Date.now() - p.t.toMillis() > PRES_ONLINE_MS) return { on: false, state: "off" };
+  if (!p || !p.t || !p.t.toMillis || Date.now() - (p.t.toMillis() - CLK.off) > PRES_ONLINE_MS) return { on: false, state: "off" };
   return { on: true, state: p.room ? (p.playing ? "play" : "wait") : "on", game: p.game };
 }
 function presencePanel() {
@@ -2246,7 +2260,7 @@ function screenOpenRooms() {
               h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
             h("span", { class: "ri-side" },
               h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
-              h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+              h("span", { class: "ri-sub", text: "접속 " + hereCount(r) + "명" + (mine ? " · 참가 중" : "") }))));
         }))
       : h("div", { class: "empty", text: "지금 열린 방이 없어요. 게임방에서 새 방을 만들어 보세요." }),
     h("button", { type: "button", class: "ghost wide", onclick: function () { go("games"); }, text: "게임방으로 가기" }));
@@ -2271,7 +2285,7 @@ function screenLiarLobby() {
             h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
           h("span", { class: "ri-side" },
             h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: STATUS_LABEL[r.status] || r.status }),
-            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+            h("span", { class: "ri-sub", text: "접속 " + hereCount(r) + "명" + (mine ? " · 참가 중" : "") }))));
       }))
     : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
   return h("section", { class: "screen" },
@@ -3006,7 +3020,7 @@ function screenMafiaLobby() {
             h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
           h("span", { class: "ri-side" },
             h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
-            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+            h("span", { class: "ri-sub", text: "접속 " + hereCount(r) + "명" + (mine ? " · 참가 중" : "") }))));
       }))
     : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
   return h("section", { class: "screen" },
@@ -3409,7 +3423,7 @@ function screenAssocLobby() {
             h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
           h("span", { class: "ri-side" },
             h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
-            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+            h("span", { class: "ri-sub", text: "접속 " + hereCount(r) + "명" + (mine ? " · 참가 중" : "") }))));
       }))
     : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
   const sec = Math.round(aqHintMs() / 1000);
@@ -5353,7 +5367,7 @@ function screenPartyLobby(id) {
         const label = r.status === "lobby" ? "대기 중" : r.status === "result" ? "게임 끝" : "게임 중";
         return h("li", null, h("button", { type: "button", class: "room-item", onclick: function () { go("room-" + r.id); } },
           h("span", { class: "ri-main" }, h("b", { text: nickOf(r.createdBy) + "의 방" }), h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
-          h("span", { class: "ri-side" }, h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }), h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+          h("span", { class: "ri-side" }, h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }), h("span", { class: "ri-sub", text: "접속 " + hereCount(r) + "명" + (mine ? " · 참가 중" : "") }))));
       }))
     : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
   const cat = CATEGORIES.find(function (c) { return c.id === g.cat; });
@@ -5918,7 +5932,7 @@ function screenSketchLobby() {
             h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
           h("span", { class: "ri-side" },
             h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
-            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+            h("span", { class: "ri-sub", text: "접속 " + hereCount(r) + "명" + (mine ? " · 참가 중" : "") }))));
       }))
     : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
   return h("section", { class: "screen" },
@@ -6460,7 +6474,7 @@ function screenSmokeLobby() {
           h("span", { class: "ri-main" }, h("b", { text: nickOf(r.createdBy) + "의 방" }),
             h("span", { class: "ri-sub", text: (r.players || []).map(nickOf).join(", ") || "아직 아무도 없어요" })),
           h("span", { class: "ri-side" }, h("span", { class: "status-chip" + (r.status === "lobby" ? " open" : ""), text: label }),
-            h("span", { class: "ri-sub", text: (r.players || []).length + "명" + (mine ? " · 참가 중" : "") }))));
+            h("span", { class: "ri-sub", text: "접속 " + hereCount(r) + "명" + (mine ? " · 참가 중" : "") }))));
       }))
     : h("div", { class: "empty", text: S.roomsReady ? "열린 방이 없어요. 새 방을 만들어 조직원을 불러 모으세요." : "방 목록을 불러오는 중…" });
   return h("section", { class: "screen" },
