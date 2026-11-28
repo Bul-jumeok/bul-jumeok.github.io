@@ -2016,7 +2016,7 @@ function presenceOff() {
 }
 function presenceBeat(force) {
   const me = meMember(); if (!me || !S.user) return;
-  if (document.visibilityState === "hidden" || !inGameArea()) { presenceOff(); return; }
+  if (document.visibilityState === "hidden") { presenceOff(); return; }   /* 앱을 켜 두면 어디에 있든 온라인, 끄거나 내리면 바로 오프라인 */
   const r = S.room && currentRoute().indexOf("room-") === 0 ? S.room : null;
   const key = me.id + "|" + (r ? r.id + ":" + (r.status === "lobby" ? "w" : r.status === "result" ? "w" : "p") : "-");
   if (!force && key === PRES.lastKey && Date.now() - PRES.lastBeat < 50000) return;
