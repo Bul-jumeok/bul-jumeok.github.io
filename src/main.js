@@ -144,7 +144,7 @@ try { SND.on = localStorage.getItem("bf-sound") !== "off"; } catch (e) {}
 const VOL = { bgm: 70, sfx: 80 };
 if (EMU) window.__snd = SND;
 try { const v = JSON.parse(localStorage.getItem("bf-vol") || "{}"); if (v.bgm >= 0 && v.bgm <= 100) VOL.bgm = v.bgm; if (v.sfx >= 0 && v.sfx <= 100) VOL.sfx = v.sfx; } catch (e) {}
-function sfxGain() { return VOL.sfx / 80; }
+function sfxGain() { return VOL.sfx / 80 * 1.1; }
 function sfxOut(c) {
   if (!SND.sfxOut || SND.sfxOut.context !== c) { SND.sfxOut = c.createGain(); SND.sfxOut.gain.value = sfxGain(); SND.sfxOut.connect(c.destination); }
   return SND.sfxOut;
@@ -327,7 +327,7 @@ function sfx(name) {
 /* ---------- 배경음악: 직접 합성한 잔잔한 루프 (저작권 걱정 없음) ---------- */
 const BGM = { on: true, mood: null, master: null, timer: null, next: 0, bar: 0 };
 try { BGM.on = localStorage.getItem("bf-bgm") !== "off"; } catch (e) {}
-const BGM_VOL = 0.42;   /* 슬라이더 100일 때 */
+const BGM_VOL = 0.462;   /* 슬라이더 100일 때 */
 function bgmLevel(M) { return Math.max(0.0001, BGM_VOL * (VOL.bgm / 100) * (M ? M.vol : 1)); }
 if (EMU) window.__bgm = BGM;
 /* 8-bit game music: drums, a bouncing bass and a lead melody. bpm per mood, 4 chords (MIDI roots + chord tones) */
